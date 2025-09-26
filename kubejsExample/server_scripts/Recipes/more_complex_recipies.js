@@ -29,6 +29,9 @@ For the other blocks, you have the following (needs the block):
 
 - damageItem / repairItem -> Allows to change durability of certain item
                              If the item is easy in nbt like a sword, a function can be better to deal with those
+
+ - damageItemPerTick / repairItemPerTick -> Allows to change durability of certain item each tick, like a fan being used
+                             If the item is easy in nbt like a sword, a function can be better to deal with those
 */
 ServerEvents.recipes(event => {
     const time = 20 //in ticks (20 ticks = 1 second)
