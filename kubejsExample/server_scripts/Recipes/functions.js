@@ -5,12 +5,30 @@
 Functions are a way to change recipes on demand instead of hardcoding them
 There are 4 Functions:
 
-.requireFunctionToStart("id", []) -> Decides if you can start a recipe
-.requireFunctionOnStart("id", []) -> Useful to check items to give a boost
-.requireFunctionEachTick("id", []) -> When you want to check item to modify recipe time or stop it
-.requireFunctionOnEnd("id", []) -> Decides if you get a result or not
+.requireFunctionToStart("id") -> Decides if you can start a recipe
+.requireFunctionOnStart("id") -> Useful to check items to give a boost
+.requireFunctionEachTick("id") -> When you want to check item to modify recipe time or stop it
+.requireFunctionOnEnd("id") -> Decides if you get a result or not
 
-You can also send data to the functions in 3 ways:
+Or if you like, you can send data to any function adding an optional argument, an array of text:
+
+.requireFunctionToStart("id", ["hello", "im", "inside", "the boat"])
+.requireFunctionOnEachTick("boat_chooser", "hello", "im", "inside", "the boat")
+
+Or if you prefer to send an object, for example, an array with all the data,
+you can send it as a string with the global JSON:
+
+data = JSON.stringify({
+    hello: "in a boat"
+})
+
+And to get back the object, you can use:
+
+object_inside = JSON.parse(data[i]), where i is the index in the array of string you've sent
+
+
+
+You can also send data to the functions in 2 other ways:
 
 - Using global variables, like IOType, which you can access anywhere in this file
 
@@ -28,9 +46,6 @@ ServerEvents.recipes(event => {
     //on a .js on the startup_scripts folder
     global.information = "hola"
 
-- Or passing data to the function itself, as an array of text
-
-.requireFunctionOnEachTick("boat_chooser", ["hello", "im", "inside", "the boat"])
 */
 let IOType = Java.loadClass("es.degrassi.mmreborn.common.machine.IOType");
 
