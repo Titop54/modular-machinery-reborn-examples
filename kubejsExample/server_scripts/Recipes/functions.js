@@ -81,8 +81,8 @@ MMREvents.recipeFunction("boat_chooser", event => {
     let time_remaining = event.remainingTime; //Time remaining for the recipe
     event.setBaseSpeed(2) //min is 0.1
 
-    let data = event.getContext().args //to get the data passed
-    let size_data = event.getContext().args.size()
+    let data = event.args //to get the data passed
+    let size_data = event.args.size()
     //or you can go brute force (not recommended, unless you have problems with the above)
     try
     {
