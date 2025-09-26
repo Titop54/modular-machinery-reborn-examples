@@ -61,7 +61,8 @@ ServerEvents.recipes(event => {
     .requireEnergy(10000, 0, 4)
     .requireItem("minecraft:birch_boat")
     .produceItem("minecraft:oak_log")
-    .requireFunctionOnEachTick("boat_chooser", [])
+    .requireFunctionOnEachTick("boat_chooser") //not passing arguments
+    .requireFunctionOnEnd("boat_chooser", ["hello"]) //passing arguments, in this case "hello"
 })
 
 /*
