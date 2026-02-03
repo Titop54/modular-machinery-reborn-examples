@@ -32,8 +32,9 @@ For the other blocks, you have the following (needs the block):
 Specials require and produce (needs their special hatches):
 
 Similar to a Furnace burning fuel:
-.requireFuel(amount) -> Using the fuel hatch to do a recipe
+.requireFuel(amount) -> Using the fuel hatch to do a recipe (Uses default position)
 .requireFuel(amount, data) -> data is similar to ProgressData, except using FuelData and direction is inverted (instead of left to right, from right to left for example)
+Here is an example: .requireFuel(1000, FuelData.create().x(10).y(20)) //In this example, it will go from right to left and its on the position (10,20) on JEI/EMI
 
 "Portable" splash potion:
 .giveEffect(effectId, time, level, entities[]) -> effectId can be the one that you use on /effect command.
