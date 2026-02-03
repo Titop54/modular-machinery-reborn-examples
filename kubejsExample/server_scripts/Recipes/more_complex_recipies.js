@@ -3,29 +3,25 @@
 
 /*
 You can specify more requirements to your recipes
+On older versions, you would need to specify a X and Y after to put it on the JEI/EMI
 
 For the other blocks, you have the following (needs the block):
-- .chunkload -> Allows to chunkload X number of chunks, if another 2 more arguments,
-               puts X and Y text on recipe viewer
+- .chunkload -> Allows to chunkload X number of chunks
 
 - .biomes -> Allows to specify if you can run a recipe in certain biomes or not
             Needs a list (["biome_here", "biome_here"]) of biomes
             If passed after the list a true, then, those biome becomes a blacklist
-            If passed 3 arguments or 4, the last 2 are considered the X and Y on JEI
 
 - .dimensions -> Similar to biomes, but for dimensions
 
 - .weather -> Allows to run a recipe when on a specific weather ("rain", "clear", "snow", "thunder")
-              If passed another 2 arguments, the last 2 are considered the X and Y on Jei
 
 - .time -> Allows you to specify a range where recipe can be done (it's relative, from 0 to 24000), more info here: https://wikis.degrassi.es/docs/modular-machinery-reborn/section/misc/article/range
-           If passed another 2 arguments, the last 2 are considered the X and Y on Jei
 
 - .requieredHeight -> Similar to time, but for height (range is from -64 to 320)
 
 - .lootTable -> Allows you to specify a lootTable (like minecraft:chests/ancient_city)
                 If passed an argument after the loottable, then you have luck (similar to looting, but for all lootTables)
-                If passed 3 arguments or 4, the last 2 are considered the X and Y on JEI
 
 - .damageItem / .repairItem -> Allows to change durability of certain item
                                If the item is easy in nbt like a sword, a function can be better to deal with those
@@ -83,7 +79,7 @@ Amount from 0 to 15, like Minecraft redstone
 .emitRedstone(amount)
 
 Commands related:
-command is a String, it must include the /, similar on how you use it on the chat
+command is a String, it must starts with / (for example, /kill @e), similar on how you use it on the chat
 permissionLevel uses from 0 to 4 (both inclusive, default is 2) (More info here: https://minecraft.wiki/w/Permission_level)
 log is a true or false, telling you if it should log the command (false by default)
 

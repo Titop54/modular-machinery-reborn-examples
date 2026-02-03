@@ -137,6 +137,7 @@ You can also say "I want at max 2 hatches but I want at least 50 casing"
 Well, you can do that too!
 
 You can use a block or a tag:
+min_range, max_range and amount are numbers, from 1 to higher
 
 //Range of allowed blocks
 .addMinMaxBlock("<block or tag>", min_range, max_range)
@@ -150,7 +151,6 @@ You can use a block or a tag:
 //An exact number of block 
 .addExactBlock("<block or tag>", amount)
 
-min_range, max_range and amount are numbers, from 1 to higher
 */
 
 MMREvents.machines(event => {
@@ -170,4 +170,33 @@ MMREvents.machines(event => {
         .addMinBlock("minecraft:stone", 1)
         //Those requirements goes on the structure builder
     )
+})
+
+/*
+Or maybe you want to have a custom model for the controller?
+
+modelLocation can be ControllerModel.of("modid:blockid")
+status can be the following values: "MISSING_STRUCTURE", "IDLE", "RUNNING", "ERRORED", "PAUSED"
+Can be in lowercase
+
+.controllerModel(modelLocation)
+
+.controllerModel(status, modelLocation)
+*/
+MMREvents.machines(event => {
+    event.create("mmr:lcr9")
+    .color("#ff0080ff") //Color with format #ffrrggbb in hexadecimal
+    .name("Large Chemical Reactor") //or .color("namespace.machine.name") to use the lang file
+    .structure(
+        MMRStructureBuilder.create()
+        .pattern([
+            ["aaa","aaa","aaa"],
+            ["ama","a a","aaa"],
+            ["aaa","aaa","aaa"]
+        ])
+        .keys({
+            "a":["modular_machinery_reborn:casing_plain"]
+        })
+    )
+    .controllerModel(ControllerModel.of("immersiveengineering:refinery"))
 })

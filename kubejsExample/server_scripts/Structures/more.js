@@ -2,6 +2,10 @@
 //https://wikis.degrassi.es/docs/modular-machinery-reborn
 
 /*
+They follow the following logic for most hatches:
+<modid>:<type like energy or chemical>_<input/output>_hatch_<size>
+Here is a collection of hatches that can change textures:
+
 Hatches textures:
 
 modular_machinery_reborn:parallel_hatch_basic
@@ -88,6 +92,16 @@ modular_machinery_reborn:time_counter
 modular_machinery_reborn:weather_sensor
 modular_machinery_reborn:height_meter
 
+Mekanism:
+modular_machinery_reborn_mekanism:chemical_input_hatch_<size>
+modular_machinery_reborn_mekanism:chemical_output_hatch_<size>
+modular_machinery_reborn_mekanism:heat_input_vent<_size>
+modular_machinery_reborn_mekanism:heat_output_vent<_size>
+
+Ars MMR:
+modular_machinery_reborn_ars:source_input_hatch_<size>
+modular_machinery_reborn_ars:source_output_hatch_<size>
+
 */
 
 /*
@@ -103,5 +117,11 @@ It's more like a sort of upgrader on demand
 .placeStructure(MMRStructureBuilder.createRequirement()) // Same as above with true
 
 It's similar to the structure on the .structure(), but needs the special hatches, and m (the controller) is changed to $
-You need to use the Structure Creator
+You need to use the Structure Creator.
+
+There is also another special key, "_", which basically tells that block is not the controller nor the structure checker block
+Its like " ", but having a small blacklist.
+To summary this special key:
+- On create() -> Blacklists the controller
+- On createRequirement() -> Blacklists the structure checker
 */
