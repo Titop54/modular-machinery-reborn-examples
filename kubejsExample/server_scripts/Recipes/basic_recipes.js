@@ -3,7 +3,8 @@
 
 /*
 1 second = 20 ticks
-1 Bucket (like a water bucket) = 1000 mB
+1 Bucket (like a water bucket) = 1000 mB -> For fluids
+Chemicals from mekanism, like steam or sulfuric acid follows the same logic as fluids
 
 What if we want to add a recipe for our multiblock?
 Easy, just as the follow
@@ -74,8 +75,10 @@ ServerEvents.recipes(event => {
 
 /*
 But the arrow isnt centered too...
-Well, you have progressX and progressY where you can put a whole number
-and customize where the arrow is
+Well, you have progressData to customize it, given 2 numbers, it can change the position
+of the arrow
+
+If you are on lower than 3.0.0, you would need to use .progressX(number) and progressY(number)
 
 Or disable it
 */
@@ -83,14 +86,12 @@ ServerEvents.recipes(event => {
     const time = 20 //in ticks (20 ticks = 1 second)
     const machine_id = "mmr:lcr6"
     event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)
-    .progressX(20)
-    .progressY(20)
+    .progressData(ProgressData.create().x(54).y(20))
     .requireItem("minecraft:cherry_boat", 10, 10)
     .produceItem("minecraft:oak_log", 40, 10)
 
     event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)
-    //.progressX(20)
-    //.progressY(20)
+    //.progressData(ProgressData.create().x(54).y(20))
     .renderProgress(false) //or you can disable it
     .requireItem("minecraft:oak_boat", 10, 10)
     .produceItem("minecraft:oak_log", 40, 10)
@@ -106,6 +107,54 @@ ServerEvents.recipes(event => {
     const time = 20 //in ticks (20 ticks = 1 second)
     const machine_id = "mmr:lcr6"
     event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)
+    .width(110)
+    .height(60)
+    .requireItem("minecraft:jungle_boat", 10, 10)
+    .produceItem("minecraft:oak_log", 40, 10)
+})
+
+/*
+Or you can even customize more things from the arrow, like textures or direction
+For example, I want the texture from X mod and when the progress bar is being filled, 
+it will change to X mod's texture.
+Or even you can change the direction, from left to right or up to down
+ */
+
+ServerEvents.recipes(event => {
+    const time = 20 //in ticks (20 ticks = 1 second)
+    const machine_id = "mmr:lcr6"
+
+    event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)
+    .progressData(
+        ProgressData.create() //There are other methods to do the same
+        .x(54)
+        .y(20)
+        .direction("right") //Can be left or right or top or bottom
+        .emptyTexture("<ResourceLocation path goes here>") //default "modular_machinery_reborn:textures/gui/empty_arrow.png"
+        .filledTexture("<ResourceLocation path goes here>") //default "modular_machinery_reborn:textures/gui/filled_arrow.png"
+        //For more info about ResourceLocation path, check modifiers.js on the Structure folder
+    )
+    .width(110)
+    .height(60)
+    .requireItem("minecraft:jungle_boat", 10, 10)
+    .produceItem("minecraft:oak_log", 40, 10)
+
+    event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)
+    .progressData(
+        //Here you can also use the following methods instead of the builder
+
+        //ProgressData.of(x, y, direction, emptyTexture, filledTexture)
+      
+        //ProgressData.of(x, y)
+        
+        //ProgressData.of(emptyTexture, filledtexture)
+        
+        //ProgressData.of(direction, emptyTexture, filledtexture)
+        
+        //ProgressData.of(x, y, emptyTexture, filledtexture)
+
+        //They follow the same logic as the recipe above
+    )
     .width(110)
     .height(60)
     .requireItem("minecraft:jungle_boat", 10, 10)

@@ -63,31 +63,59 @@ ServerEvents.recipes(event => {
     .produceItem("minecraft:oak_log")
     .requireFunctionOnEachTick("boat_chooser") //not passing arguments
     .requireFunctionOnEnd("boat_chooser", ["hello"]) //passing arguments, in this case "hello"
+    .requireFunctionOnEnd("boat_chooser", []) //also not passing arguments
+    .requireFunctionOnEnd("boat_chooser", "hello", "hola!") //passing 2 arguments
 })
 
 /*
-For more advanced users, you can check all methods here: 
+For more advanced users, you can check all methods here:
 https://github.com/alec016/modular-machinery-reborn/blob/1.21-NeoForge/src/main/java/es/degrassi/mmreborn/common/integration/kubejs/function/MachineControllerJS.java
 
 For less advanced users (and more advanced users), 
 you can use probejs during development to get all methods that controller has
 */
 MMREvents.recipeFunction("boat_chooser", event => {
-    let controller = event.machine; //This has more useful functions, more can be found here https://wikis.degrassi.es/docs/modular-machinery-reborn/section/creating-a-new-recipe/article/machine
-    
-    let level = event.getTile().getLevel(); //Allows to get to the Level class, useful to do commands or more
-    let pos = event.getTile().getBlockPos(); //Controller position
-    let speed = event.baseSpeed; //speed of the recipe
-    let time_remaining = event.remainingTime; //Time remaining for the recipe
-    event.setBaseSpeed(2) //min is 0.1
+    //This has more useful functions, more can be found here https://wikis.degrassi.es/docs/modular-machinery-reborn/section/creating-a-new-recipe/article/machine
+    //Or here: https://github.com/alec016/modular-machinery-reborn/blob/1.21-NeoForge/src/main/java/es/degrassi/mmreborn/common/integration/kubejs/function/MachineControllerJS.java
+    let controller = event.machine;
 
-    let data = event.args //to get the data passed
-    let size_data = event.args.size()
-    //or you can go brute force (not recommended, unless you have problems with the above)
+    //Allows to get to the Level class, useful to do commands or more, dynamically. 
+    //For example, particles depending on the player hotbar items
+    let level = event.getTile().getLevel();
+
+    //Controller position
+    let pos = event.getTile().getBlockPos();
+
+    //Speed of the recipe
+    let speed = event.baseSpeed;
+
+    //Time remaining for the recipe to be done
+    let time_remaining = event.remainingTime;
+
+    //Allows to change the recipe speed. 0.1 is the minimun time
+    event.setBaseSpeed(2)
+
+    /*
+    To get the data passed as an array
+    This is a Java List of String, so you can use any of their methods
+
+    Documentation of List: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html
+    Documentation of String: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html
+
+    On most cases, you will only need .equals() or lenght() for String or .split() (this last one is from Java, not JS)
+    */
+    let data = event.args
+    let size = event.args.size()
+    
+    /*
+    Or if you have problems, you can try to guess the size
+    */
     try
     {
-        //ofc, you will limit the maximum because of lag reason
-        //100 or 10 will be more than enough in most cases
+        /*
+        Due to Rhino, making huge loops can be costly on Functions meant to run fast
+        So take that into consideration 
+        */
         for(let i = 0; i < 10/*2147483647*/; i++)
         {
             data[i] = event.get(i)
@@ -96,6 +124,10 @@ MMREvents.recipeFunction("boat_chooser", event => {
     catch(error) //this says, that we have no more data, you can ignore it
     {}
     
+    /*
+    For items and fluids, those methods returns a List of FluidStack (for fluids) or a List
+    of ItemStack (for items)
+    */
 
     let inputItems = controller.getItemsStored(IOType.INPUT); //Get a list with all items
     let outputItems = controller.getItemsStored(IOType.OUTPUT);
@@ -103,11 +135,13 @@ MMREvents.recipeFunction("boat_chooser", event => {
     let inputFluids = controller.getFluidsStored(IOType.INPUT); //Get a list with all fluids
     let outputFluids = controller.getFluidsStored(IOType.OUTPUT);
 
-    let inputEnergy = controller.getEnergyStored(IOType.INPUT); //Get how much energy is stored
+    let inputEnergy = controller.getEnergyStored(IOType.INPUT); //Get how much energy is stored. Return a number
     let outputEnergy = controller.getEnergyStored(IOType.OUTPUT);
-    let capacity = controller.getEnergyCapacity(IOType.OUTPUT);//gets the maximum capacity, not the same
+
+    let capacity = controller.getEnergyCapacity(IOType.OUTPUT);//Get the maximum capacity, not the same. Return a number
+
     controller.setPaused(true) //To pause the recipe
     
     //if you want to specify an error, use event.error("Text here")
-    //If not, dont specify something
+    //If not, dont specify something or event.success(), but not doing nothing also works
 })
