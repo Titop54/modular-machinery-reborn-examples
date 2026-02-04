@@ -95,8 +95,8 @@ modular_machinery_reborn:height_meter
 Mekanism:
 modular_machinery_reborn_mekanism:chemical_input_hatch_<size>
 modular_machinery_reborn_mekanism:chemical_output_hatch_<size>
-modular_machinery_reborn_mekanism:heat_input_vent<_size>
-modular_machinery_reborn_mekanism:heat_output_vent<_size>
+modular_machinery_reborn_mekanism:heat_input_vent
+modular_machinery_reborn_mekanism:heat_output_vent
 
 Ars MMR:
 modular_machinery_reborn_ars:source_input_hatch_<size>

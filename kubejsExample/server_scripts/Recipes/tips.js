@@ -60,13 +60,13 @@ ServerEvents.recipes(event => {
     [1,2,3,4,5,6,7,8,9,10].forEach(number => {
         let copy = ingredient_wiht_nbt.copy() //Copy is not necessary, but makes sure you don't modify the original item
 
-        //Using this method has an advantage over the other, being able to do more than 90 items per recipe
+        //Using this method has an advantage over the other, being able to do more than 99 items per recipe
         copy.setCount(original_count * number)
 
         event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)
             .requireItem(copy, 10, 10)
             .emptyItem(10, 20)
-            .produceItem(`${number}x minecraft:oak_log`, 0.1, 40, 10) //Up to 90 items
+            .produceItem(`${number}x minecraft:oak_log`, 0.1, 40, 10) //Up to 99 items
         //For higher than 1, I would recommend to use .hide(), since it can add to the recipe view 
         //pretty fast
     });
