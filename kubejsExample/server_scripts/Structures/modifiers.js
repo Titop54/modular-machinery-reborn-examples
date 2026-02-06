@@ -32,6 +32,8 @@ MMREvents.machines(event => {
 
     Can be on assets/mod/model (example: minecraft:block/grass) or a blockid (modid:blockid)
     ControllerModel is accesible without adding a Java.loadClass
+
+    There are more functions from .controllerModel on more_complex_structure.js
     */
     .controllerModel(ControllerModel.of('minecraft:stone'))
 })
