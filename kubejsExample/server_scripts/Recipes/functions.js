@@ -54,8 +54,7 @@ ServerEvents.recipes(event => {
     const time = 20 //in ticks (20 ticks = 1 second)
     const machine_id = "mmr:lcr6"
     event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)
-    .progressX(54)
-    .progressY(20)
+    .progressData(ProgressData.create().x(54).y(20))
     .width(110)
     .height(60)
     .requireEnergy(10000, 0, 4)
