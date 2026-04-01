@@ -1,21 +1,31 @@
 package es.degrassi.mmreborn.common.entity.base;
 
+import com.google.common.collect.Maps;
 import es.degrassi.mmreborn.ModularMachineryReborn;
+import es.degrassi.mmreborn.api.capability.config.IOSideConfig;
+import es.degrassi.mmreborn.api.capability.config.IOSideMode;
+import es.degrassi.mmreborn.api.capability.config.ISideConfigComponent;
 import es.degrassi.mmreborn.api.controller.ControllerAccessible;
-import es.degrassi.mmreborn.client.model.hatch.HatchBakedModel;
+import es.degrassi.mmreborn.api.network.ISyncable;
+import es.degrassi.mmreborn.api.network.ISyncableStuff;
+import es.degrassi.mmreborn.api.network.syncable.IOSideConfigSyncable;
+import es.degrassi.mmreborn.client.integration.athena.model.hatch.HatchTextureData;
 import es.degrassi.mmreborn.common.block.prop.FluidHatchSize;
 import es.degrassi.mmreborn.common.entity.FluidInputHatchEntity;
+import es.degrassi.mmreborn.common.entity.MachineControllerEntity;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.MachineHatchType;
 import es.degrassi.mmreborn.common.machine.component.FluidComponent;
+import es.degrassi.mmreborn.common.manager.handler.FluidHandler;
+import es.degrassi.mmreborn.common.manager.handler.ItemHandler;
 import es.degrassi.mmreborn.common.network.server.SUpdateMachineTexturePacket;
+import es.degrassi.mmreborn.common.network.server.component.SUpdateFluidComponentPacket;
 import es.degrassi.mmreborn.common.registration.MachineHatchTypeRegistration;
-import es.degrassi.mmreborn.common.util.HybridTank;
-import es.degrassi.mmreborn.common.util.IOInventory;
 import es.degrassi.mmreborn.common.util.Utils;
 import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -28,6 +38,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.ItemCapability;
 import net.neoforged.neoforge.client.model.data.ModelData;
@@ -36,33 +47,36 @@ import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import javax.annotation.Nullable;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 @Getter
 @Setter
 public abstract class FluidTankEntity extends ColorableMachineComponentEntity implements MachineComponentEntity<FluidComponent>, ControllerAccessible,
-    TextureableMachineEntity, CapabilityInventoryEntity<IFluidHandlerItem>, ITickEntity, IServerTickEntity {
-  private HybridTank tank;
+    TextureableMachineEntity, CapabilityInventoryEntity<IFluidHandlerItem>, ITickEntity, IServerTickEntity,
+    ISyncableStuff, IAutoEntity<IFluidHandler>, ISideConfigComponent<IOSideMode> {
+  private FluidHandler tank;
   private IOType ioType;
   private FluidHatchSize hatchSize;
+  @Nullable
   private BlockPos controllerPos;
-
-  @Getter
-  @Setter
   private ResourceLocation baseTexture;
-  @Getter
-  @Setter
   private ResourceLocation overlayTexture;
-  @Getter
   private ResourceLocation defaultOverlayTexture;
   @Getter
   private static final ResourceLocation defaultBaseTexture = ModularMachineryReborn.rl("block/casing_plain");
 
   @Getter
-  private final IOInventory capabilityInventory;
+  private final ItemHandler capabilityInventory;
 
   private final long tickOffset = Utils.RAND.nextIntBetweenInclusive(0, Integer.MAX_VALUE - 1);
   private long lastCheckTick;
+  private final Map<Direction, BlockCapabilityCache<IFluidHandler, Direction>> neighbourStorages = Maps.newEnumMap(Direction.class);
+
+  @Getter
+  private final IOSideConfig config;
 
   protected FluidTankEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, FluidHatchSize size,
                            IOType ioType) {
@@ -74,9 +88,21 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
     this.overlayTexture = defaultOverlayTexture;
     this.capabilityInventory = createCapabilityInventory();
 
-    this.tank.setListener(() -> {
-      if (getController() != null)
-        getController().getProcessor().setMachineInventoryChanged();
+    this.config = IOSideConfig.Template.DEFAULT_ALL_DISABLED.build(this);
+    this.config.setCallback(this::configChanged);
+
+    this.tank.setListener((slot, value) -> {
+      if(!getLevel().isClientSide()) {
+        PacketDistributor.sendToPlayersTrackingChunk((ServerLevel) getLevel(), new ChunkPos(getBlockPos()),
+            new SUpdateFluidComponentPacket(slot, value, getBlockPos()));
+      }
+      getControllerPosSet().forEach(p -> {
+        if (getLevel() == null) return;
+        if (getLevel().isClientSide()) return;
+        if (getLevel().getBlockEntity(p) instanceof MachineControllerEntity controller) {
+          controller.getProcessor().setMachineInventoryChanged();
+        }
+      });
     });
   }
 
@@ -98,7 +124,7 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
       Optional.ofNullable(slot.getItemStack().getCapability(getCapability())).ifPresent(cap -> {
         if (ioType == IOType.NONE) return;
         if (ioType.isInput()) {
-          if (this.getTank().getFluidAmount() >= this.getTank().getCapacity()) return;
+          if (getTank().isFull()) return;
           if (slot.getItemStack().getItem() instanceof BucketItem bucket) {
             if (bucket.content.isSame(Fluids.EMPTY)) return;
             FluidStack fluid = new FluidStack(bucket.content, 1000);
@@ -113,7 +139,7 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
             getTank().fill(simulatedCap.copyWithAmount(simulatedInsert), IFluidHandler.FluidAction.EXECUTE);
           }
         } else if (ioType.isOutput()) {
-          if (this.getTank().getFluidAmount() == 0) return;
+          if (this.getTank().isEmpty()) return;
           if (slot.getItemStack().getItem() instanceof BucketItem bucket) {
             if (!bucket.content.isSame(Fluids.EMPTY)) return;
             FluidStack simulatedExtract = getTank().drain(1000, IFluidHandler.FluidAction.SIMULATE);
@@ -157,10 +183,11 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
     super.loadAdditional(compound, provider);
     this.ioType = IOType.getByString(compound.getString("ioType"));
     this.hatchSize = FluidHatchSize.value(compound.getString("size"));
-    HybridTank newTank = hatchSize.buildTank(this, ioType == IOType.INPUT, ioType == IOType.OUTPUT);
+    FluidHandler newTank = hatchSize.buildTank(this, ioType == IOType.INPUT, ioType == IOType.OUTPUT);
     CompoundTag tankTag = compound.getCompound("tank");
-    newTank.readFromNBT(provider, tankTag);
+    newTank.readNBT(tankTag, provider);
     this.tank = newTank;
+    this.capabilityInventory.deserialize(compound.getCompound("capInventory"), provider);
     if (compound.contains("controllerPos")) {
       controllerPos = BlockPos.of(compound.getLong("controllerPos"));
     }
@@ -169,9 +196,20 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
     this.baseTexture = compound.contains("baseTexture") ? ResourceLocation.parse(compound.getString("baseTexture")) : defaultBaseTexture;
     this.overlayTexture = compound.contains("overlayTexture") ? ResourceLocation.parse(compound.getString("overlayTexture")) : defaultOverlayTexture;
 
-    this.tank.setListener(() -> {
-      if (getController() != null)
-        getController().getProcessor().setMachineInventoryChanged();
+    this.config.deserialize(compound.getCompound("config"));
+
+    this.tank.setListener((slot, value) -> {
+      if(!getLevel().isClientSide()) {
+        PacketDistributor.sendToPlayersTrackingChunk((ServerLevel) getLevel(), new ChunkPos(getBlockPos()),
+            new SUpdateFluidComponentPacket(slot, value, getBlockPos()));
+      }
+      getControllerPosSet().forEach(p -> {
+        if (getLevel() == null) return;
+        if (getLevel().isClientSide()) return;
+        if (getLevel().getBlockEntity(p) instanceof MachineControllerEntity controller) {
+          controller.getProcessor().setMachineInventoryChanged();
+        }
+      });
     });
   }
 
@@ -183,15 +221,15 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
     }
     compound.putString("ioType", ioType.getSerializedName());
     compound.putString("size", this.hatchSize.getSerializedName());
-    CompoundTag tankTag = new CompoundTag();
-    this.tank.writeToNBT(provider, tankTag);
-    compound.put("tank", tankTag);
+    compound.put("tank", this.tank.writeNBT(provider));
+    compound.put("capInventory", this.capabilityInventory.writeNBT(provider));
     if (controllerPos != null)
       compound.putLong("controllerPos", controllerPos.asLong());
     if (baseTexture != null)
       compound.putString("baseTexture", baseTexture.toString());
     if (overlayTexture != null)
       compound.putString("overlayTexture", overlayTexture.toString());
+    compound.put("config", this.config.serialize());
   }
 
   @Override
@@ -199,15 +237,22 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
     this.controllerPos = pos;
   }
 
-
   @Override
   public ModelData getModelData() {
-    ModelData.Builder builder = getModelDataBuilder("all");
-    builder.with(HatchBakedModel.BASE_TEXTURE, baseTexture)
-        .with(HatchBakedModel.BASE_TEXTURE_NAME, "bg_all");
-    builder.with(HatchBakedModel.OVERLAY_TEXTURE, overlayTexture)
-        .with(HatchBakedModel.OVERLAY_TEXTURE_NAME, "ov_all");
-    return builder.build();
+    return getModelDataBuilder("all").build();
+  }
+
+  @Override
+  public HatchTextureData getTextureData(String mode) {
+    return MachineComponentEntity.super.getTextureData(mode).derive(
+        "bg_all",
+        baseTexture,
+        defaultBaseTexture,
+        "ov_all",
+        overlayTexture,
+        defaultOverlayTexture,
+        false
+    );
   }
 
   @Override
@@ -272,9 +317,14 @@ public abstract class FluidTankEntity extends ColorableMachineComponentEntity im
         case BIG -> MachineHatchTypeRegistration.FLUID_OUTPUT_HATCH_BIG;
         case HUGE -> MachineHatchTypeRegistration.FLUID_OUTPUT_HATCH_HUGE;
         case LUDICROUS -> MachineHatchTypeRegistration.FLUID_OUTPUT_HATCH_LUDICROUS;
-        case VACUUM -> MachineHatchTypeRegistration.FLUID_INPUT_HATCH_VACUUM;
+        case VACUUM -> MachineHatchTypeRegistration.FLUID_OUTPUT_HATCH_VACUUM;
       }).get();
       default -> null;
     };
+  }
+
+  @Override
+  public void getStuffToSync(Consumer<ISyncable<?, ?>> container) {
+    container.accept(IOSideConfigSyncable.create(this::getConfig, this.config::set));
   }
 }

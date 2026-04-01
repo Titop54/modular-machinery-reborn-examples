@@ -7,6 +7,7 @@ import es.degrassi.mmreborn.api.crafting.IProcessorTemplate;
 import es.degrassi.mmreborn.api.network.ISyncable;
 import es.degrassi.mmreborn.api.network.ISyncableStuff;
 import es.degrassi.mmreborn.common.data.MMRConfig;
+import es.degrassi.mmreborn.common.data.config.ParallelHatchConfig;
 import es.degrassi.mmreborn.common.entity.MachineControllerEntity;
 import es.degrassi.mmreborn.common.registration.ProcessorTypeRegistration;
 import lombok.Getter;
@@ -32,7 +33,7 @@ public class MachineProcessor implements IProcessor, ISyncableStuff {
     this.tile = tile;
     int maxParallel = Math.max(
         MMRConfig.get().maxParallel.get(),
-        MMRConfig.get().getMaxParallel()
+        ParallelHatchConfig.get().getMaxParallel()
     );
     cores = Lists.newArrayList();
     for (int i = 0; i < maxParallel; ++i) {
@@ -61,7 +62,7 @@ public class MachineProcessor implements IProcessor, ISyncableStuff {
 
     this.cores.forEach(MachineProcessorCore::tick);
 
-    if (this.tile.getStatus() == MachineStatus.RUNNING && this.cores.stream().noneMatch(MachineProcessorCore::hasActiveRecipe)) {
+    if (this.tile.getStatus() != MachineStatus.IDLE && this.cores.stream().noneMatch(MachineProcessorCore::hasActiveRecipe) && !this.tile.getStatus().isMissingStructure()) {
       this.tile.setStatus(MachineStatus.IDLE);
     }
   }
@@ -71,6 +72,7 @@ public class MachineProcessor implements IProcessor, ISyncableStuff {
     for (int i = 0; i < Math.min(cores, this.cores.size()); ++i) {
       this.cores.get(i).setActive(true);
     }
+    tile.updateCorePages();
   }
 
   private void init() {
@@ -86,7 +88,7 @@ public class MachineProcessor implements IProcessor, ISyncableStuff {
   }
 
   public void setError(Component message) {
-    if(this.cores.stream().allMatch(core -> core.getError() != null || core.getCurrentRecipe() == null))
+    if(this.cores.stream().allMatch(core -> !core.isActive() || core.getError() != null || core.getCurrentRecipe() == null))
       this.tile.setStatus(MachineStatus.ERRORED, message);
   }
 
@@ -101,11 +103,15 @@ public class MachineProcessor implements IProcessor, ISyncableStuff {
 
   @Override
   public void setMachineInventoryChanged() {
+    if (!this.tile.getStatus().isCrafting())
+      this.tile.setStatus(MachineStatus.IDLE);
     this.cores.forEach(MachineProcessorCore::setComponentChanged);
   }
 
   @Override
   public void setSearchImmediately() {
+    if (!this.tile.getStatus().isCrafting())
+      this.tile.setStatus(MachineStatus.IDLE);
     this.cores.forEach(MachineProcessorCore::setSearchImmediately);
   }
 
@@ -137,7 +143,6 @@ public class MachineProcessor implements IProcessor, ISyncableStuff {
   public record Template() implements IProcessorTemplate<MachineProcessor> {
     public static final Template DEFAULT = new Template();
     public static final NamedCodec<Template> CODEC = NamedCodec.unit(DEFAULT);
-
 
     @Override
     public ProcessorType<MachineProcessor> getType() {

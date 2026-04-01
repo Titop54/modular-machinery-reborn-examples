@@ -2,6 +2,7 @@ package es.degrassi.mmreborn.common.item;
 
 import es.degrassi.mmreborn.ModularMachineryReborn;
 import es.degrassi.mmreborn.api.BlockIngredient;
+import es.degrassi.mmreborn.api.client.machine.TooltipUse;
 import es.degrassi.mmreborn.common.block.BlockController;
 import es.degrassi.mmreborn.common.machine.DynamicMachine;
 import es.degrassi.mmreborn.common.registration.BlockRegistration;
@@ -24,7 +25,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.List;
@@ -55,7 +55,16 @@ public class ControllerItem extends ItemBlockMachineComponent {
     tooltipComponents.add(Component.translatable("modular_machinery_reborn.controller.tooltip.0"));
     tooltipComponents.add(Component.translatable("modular_machinery_reborn.controller.tooltip.1"));
     getMachine(stack).ifPresentOrElse(machine -> {
-      if (tooltipFlag.hasShiftDown()) {
+      if (tooltipFlag.hasAltDown()) {
+        machine.getPattern().getMinBlocksPredicate()
+            .minBlocks()
+            .forEach((key, value) -> {
+              tooltipComponents.add(Component.translatable(
+                  "modular_machinery_reborn.controller.required.block",
+                  key.getNamesUnified().append(value.guiText())
+              ).withStyle(ChatFormatting.GRAY));
+            });
+      } else if (tooltipFlag.hasShiftDown()) {
         tooltipComponents.add(Component.translatable("modular_machinery_reborn.controller.required").withStyle(ChatFormatting.GRAY));
         machine.getPattern()
             .getPattern()
@@ -100,6 +109,12 @@ public class ControllerItem extends ItemBlockMachineComponent {
       } else {
         tooltipComponents.add(
             Component.empty()
+                .append(Component.translatable("modular_machinery_reborn.controller.alt").withStyle(ChatFormatting.YELLOW))
+                .append(" ")
+                .append(Component.translatable("modular_machinery_reborn.controller.alt.minmax").withStyle(ChatFormatting.GRAY))
+        );
+        tooltipComponents.add(
+            Component.empty()
                 .append(Component.translatable("modular_machinery_reborn.controller.shift").withStyle(ChatFormatting.YELLOW))
                 .append(" ")
                 .append(Component.translatable("modular_machinery_reborn.controller.shift.blocks").withStyle(ChatFormatting.GRAY))
@@ -111,6 +126,12 @@ public class ControllerItem extends ItemBlockMachineComponent {
                 .append(Component.translatable("modular_machinery_reborn.controller.control.modifier").withStyle(ChatFormatting.GRAY))
         );
       }
+      var enumTooltips = ModularMachineryReborn.MACHINE_EXTRA_TOOLTIPS.get(machine.getRegistryName());
+      if (enumTooltips == null || enumTooltips.isEmpty()) return;
+      var extra = enumTooltips.get(TooltipUse.ITEM);
+      if (extra == null || extra.isEmpty()) return;
+      tooltipComponents.add(Component.literal(""));
+      tooltipComponents.addAll(extra);
     }, () -> tooltipComponents.add(Component.translatable("modular_machinery_reborn.controller.no_machine").withStyle(ChatFormatting.GRAY)));
   }
 
@@ -163,7 +184,7 @@ public class ControllerItem extends ItemBlockMachineComponent {
   }
 
   @Override
-  public @NotNull Component getName(@NotNull ItemStack pStack) {
+  public Component getName(ItemStack pStack) {
     return getMachine(pStack).map(DynamicMachine::getName).orElse(super.getName(pStack));
   }
 }

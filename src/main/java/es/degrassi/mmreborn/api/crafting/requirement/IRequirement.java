@@ -17,20 +17,20 @@ import net.minecraft.resources.ResourceLocation;
 
 import javax.annotation.Nonnull;
 
-public interface IRequirement<C extends MachineComponent<?>> {
+public interface IRequirement<C extends MachineComponent<T>, T> {
 
   /**
    * A dispatch codec, used by the {@link es.degrassi.mmreborn.common.crafting.MachineRecipe} main codec to parse all requirements from json using the "type"
    * property of the requirement.
    */
-  NamedMapCodec<IRequirement<?>> CODEC = RegistrarCodec.REQUIREMENT_NEW.dispatch(IRequirement::getType, RequirementType::getCodec, "Requirement");
+  NamedMapCodec<IRequirement<?, ?>> CODEC = RegistrarCodec.REQUIREMENT_NEW.dispatch(IRequirement::getType, RequirementType::getCodec, "Requirement");
 
   /**
    * Used by the requirement dispatch codec to serialize an IRequirement.
    * This MUST return the same instance of the {@link RequirementType} as the one registered in the forge registry.
    * @return The type of this requirement.
    */
-  RequirementType<? extends IRequirement<C>> getType();
+  RequirementType<? extends IRequirement<C, T>, C, T> getType();
 
   /**
    * Used by the crafting process to find which component the requirement use.
@@ -38,7 +38,7 @@ public interface IRequirement<C extends MachineComponent<?>> {
    * This MUST return the same instance of the {@link ComponentType} as the one registered in the forge registry.
    * @return The type of component used by this requirement.
    */
-  ComponentType getComponentType();
+  ComponentType<T> getComponentType();
 
   /**
    * Currently only used by machine upgrades to find whether they apply to this requirement.
@@ -88,6 +88,10 @@ public interface IRequirement<C extends MachineComponent<?>> {
   }
 
   default void setModified(boolean modified) {
+
+  }
+
+  default void getDefaultDisplayInfo(IDisplayInfo info, RecipeRequirement<?, ?, ?> requirement) {
 
   }
 }

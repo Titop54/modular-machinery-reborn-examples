@@ -3,16 +3,17 @@ package es.degrassi.mmreborn.api;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.mojang.brigadier.StringReader;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.datafixers.util.Either;
-import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
-import com.mojang.serialization.JsonOps;
 import es.degrassi.mmreborn.api.codec.NamedCodec;
-import es.degrassi.mmreborn.common.util.Utils;
 import lombok.Getter;
 import lombok.Setter;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -27,35 +28,68 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.pattern.BlockInWorld;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-public class BlockIngredient implements IIngredient<PartialBlockState> {
-  public static final BlockIngredient AIR = new BlockIngredient(PartialBlockState.AIR);
-  public static final BlockIngredient ANY = new BlockIngredient(PartialBlockState.ANY);
-  public static final BlockIngredient MACHINE = new BlockIngredient(PartialBlockState.MACHINE);
-  public static final BlockIngredient NOT_MACHINE = new BlockIngredient(PartialBlockState.NOT_MACHINE);
+public class BlockIngredient implements IIngredient<PartialBlockState, BlockInWorld> {
+  public static final BlockIngredient AIR = new BlockIngredient("air", false, PartialBlockState.AIR);
+  public static final BlockIngredient ANY = new BlockIngredient("any", false, PartialBlockState.ANY);
+  public static final BlockIngredient MACHINE = new BlockIngredient("machine", false, PartialBlockState.MACHINE);
+  public static final BlockIngredient NOT_MACHINE = new BlockIngredient("not_machine", true, PartialBlockState.MACHINE);
+  public static final BlockIngredient STRUCTURE_CHECKER = new BlockIngredient("structure_creator", false, PartialBlockState.STRUCTURE_CHECKER);
+  public static final BlockIngredient NOT_STRUCTURE_CHECKER = new BlockIngredient("not_structure_creator", true, PartialBlockState.STRUCTURE_CHECKER);
 
-  public static final NamedCodec<BlockIngredient> TAG_CODEC = NamedCodec.STRING.comapFlatMap(string -> {
+  public static final NamedCodec<BlockIngredient> STRING_CODEC = NamedCodec.STRING.comapFlatMap(s -> {
     try {
-      return DataResult.success(BlockIngredient.create(string));
-    } catch (IllegalArgumentException e) {
+      StringReader reader = new StringReader(s);
+      reader.skipWhitespace();
+      boolean not = false;
+
+      if (!reader.getRemaining().contains("[") && reader.getRemaining().contains("]")) {
+        reader = new StringReader(reader.getRemaining().replaceAll("]", ""));
+      }
+
+      if (reader.peek() == '!') {
+        not = true;
+        reader.skip();
+      }
+      if (reader.peek() == '[') {
+        reader.skip();
+        s = reader.readStringUntil(']');
+      } else {
+        s = reader.getRemaining();
+      }
+
+      String[] arr = s.split(", ");
+      return DataResult.success(
+          Arrays.stream(arr)
+              .map(string -> {
+                try {
+                  return BlockIngredient.of(string);
+                } catch (CommandSyntaxException e) {
+                  throw new IllegalArgumentException(e);
+                }
+              })
+              .reduce(new BlockIngredient("", not, Collections.emptyList(), Collections.emptyList()), BlockIngredient::merge)
+      );
+    } catch(IllegalArgumentException | CommandSyntaxException e) {
       return DataResult.error(e::getMessage);
     }
-  }, BlockIngredient::getString, "BlockIngredient with tag");
+  }, BlockIngredient::getString, "BlockIngredient from string");
 
-  public static final NamedCodec<BlockIngredient> CODEC = NamedCodec.either(
+  public static final NamedCodec<BlockIngredient> ING_CODEC = NamedCodec.either(
       PartialBlockState.CODEC,
-      TAG_CODEC,
+      STRING_CODEC,
       "Block Ingredient"
   ).listOf().flatComapMap(
       list -> {
@@ -79,70 +113,93 @@ public class BlockIngredient implements IIngredient<PartialBlockState> {
       "Block Ingredient"
   );
 
+  public static final NamedCodec<BlockIngredient> MAP_CODEC = NamedCodec.record(blockIngredientInstance ->
+          blockIngredientInstance.group(
+              NamedCodec.BOOL.optionalFieldOf("not", false).forGetter(ingredient -> ingredient.not),
+              ING_CODEC.fieldOf("ingredient").forGetter(Function.identity())
+          ).apply(
+              blockIngredientInstance,
+              (not, ingredient) -> new BlockIngredient(ingredient.id, not, ingredient.insertedTags, ingredient.insertedStates)
+          ),
+      "Block ingredient"
+  );
+
+  public static final NamedCodec<BlockIngredient> CODEC =
+      NamedCodec.either(MAP_CODEC, STRING_CODEC).xmap(either -> either.map(Function.identity(), Function.identity()),
+          Either::left, "Block Ingredient");
+
   private final Supplier<List<PartialBlockState>> partialBlockStates;
-  @Getter
-  private final boolean isTag;
   @Getter
   @Setter
   private List<TagKey<Block>> tags = Lists.newArrayList();
+  @Getter
+  private final boolean not;
+  final List<TagKey<Block>> insertedTags;
+  final List<PartialBlockState> insertedStates;
 
-  public BlockIngredient(List<TagKey<Block>> tags, List<PartialBlockState> states) {
+  @Getter
+  private final String id;
+
+  public BlockIngredient(String id, List<TagKey<Block>> tags, List<PartialBlockState> states) {
+    this(id, false, tags, states);
+  }
+
+  public BlockIngredient(String id, boolean not, List<TagKey<Block>> tags, List<PartialBlockState> states) {
     List<PartialBlockState> statesCopy = Lists.newArrayList(states);
-    this.isTag = !tags.isEmpty();
-    if (isTag) {
-      this.tags.addAll(tags);
-      tags.forEach(tag ->
-          statesCopy.addAll(TagUtil.getBlocks(tag)
-              .map(PartialBlockState::new)
-              .toList())
-      );
-    }
+    this.insertedStates = states;
+    this.insertedTags = tags;
+    this.tags.addAll(tags);
+    this.not = not;
+    tags.forEach(tag ->
+        statesCopy.addAll(TagUtil.getBlocks(tag)
+            .map(PartialBlockState::new)
+            .toList())
+    );
     this.partialBlockStates = Suppliers.memoize(() -> ImmutableList.copyOf(statesCopy));
+    this.id = id;
+  }
+
+  public BlockIngredient(String id, boolean not, PartialBlockState partialBlockState) {
+    this(id, not, Collections.emptyList(), Collections.singletonList(partialBlockState));
+  }
+
+  public BlockIngredient(String id, PartialBlockState partialBlockState) {
+    this(id, false, partialBlockState);
   }
 
   public BlockIngredient(PartialBlockState partialBlockState) {
-    this(Collections.emptyList(), Collections.singletonList(partialBlockState));
+    this("", partialBlockState);
   }
 
-  public static BlockIngredient create(String s) throws IllegalArgumentException {
-    if (s.startsWith("[")) {
-      if (s.endsWith("]")) {
-        s = s.substring(1, s.length() - 1);
-      } else {
-        s = s.substring(1);
-      }
-    }
-    String[] arr = s.split(", ");
-    List<TagKey<Block>> tags = Lists.newArrayList();
-    List<PartialBlockState> states = Lists.newArrayList();
-    Arrays.asList(arr).forEach(string -> {
-      if (string.startsWith("#")) {
-        string = string.substring(1);
-        if (!Utils.isResourceNameValid(string))
-          throw new IllegalArgumentException(String.format("Invalid tag id : %s", string));
-        tags.add(TagKey.create(Registries.BLOCK, ResourceLocation.parse(string)));
-      } else {
-        try {
-          DataResult<PartialBlockState> result = PartialBlockState.CODEC.decode(JsonOps.INSTANCE, JsonOps.INSTANCE.createString(string)).map(Pair::getFirst);
-          states.add(result.getOrThrow());
-        } catch (Exception exception) {
-          throw new IllegalArgumentException(String.format("Invalid block id: %s", string));
-        }
-      }
-    });
-    if (tags.isEmpty() && states.isEmpty())
-      throw new IllegalArgumentException("Invalid tags or states provided, expected min size of 1");
-
-    return new BlockIngredient(tags, states);
+  public static BlockIngredient create(Object o) throws IllegalArgumentException, CommandSyntaxException {
+    if (o instanceof List<?> sa) {
+      return sa.stream()
+          .filter(s -> s instanceof CharSequence)
+          .map(s -> (CharSequence) s)
+          .map(s -> {
+            try {
+              return BlockIngredient.of(s);
+            } catch (CommandSyntaxException e) {
+              throw new IllegalArgumentException(e);
+            }
+          })
+          .reduce(
+              new BlockIngredient("", false, Collections.emptyList(), Collections.emptyList()),
+              BlockIngredient::merge
+          );
+    } else if (!(o instanceof CharSequence s)) throw new IllegalArgumentException("Block ingredient must be a string or string[]");
+    else return BlockIngredient.of(s);
   }
 
   public BlockIngredient copy() {
     return new BlockIngredient(
-        tags.stream()
+        id,
+        not,
+        insertedTags.stream()
             .map(TagKey::location)
             .map(tag -> TagKey.create(BuiltInRegistries.BLOCK.key(), tag))
             .toList(),
-        partialBlockStates.get()
+        insertedStates
             .stream()
             .map(PartialBlockState::copy)
             .toList()
@@ -155,8 +212,38 @@ public class BlockIngredient implements IIngredient<PartialBlockState> {
   }
 
   @Override
-  public boolean test(PartialBlockState partialBlockState) {
-    return this.partialBlockStates.get().stream().anyMatch(state -> state.getBlockState() == partialBlockState.getBlockState());
+  public boolean test(BlockInWorld block) {
+    boolean isTag = !this.insertedTags.isEmpty();
+    boolean partial = false;
+    if (isTag) {
+      if (this.not) {
+        partial = this.insertedTags.stream().noneMatch(tag -> block.getState().is(tag));
+      } else {
+        partial = this.insertedTags.stream().anyMatch(tag -> block.getState().is(tag));
+      }
+    }
+    if (this.not) {
+      return partial || this.insertedStates.stream().noneMatch(state -> state.test(block));
+    } else {
+      return partial || this.insertedStates.stream().anyMatch(state -> state.test(block));
+    }
+  }
+
+  public boolean test(Block block) {
+    boolean isTag = !this.insertedTags.isEmpty();
+    boolean partial = false;
+    if (isTag) {
+      if (not) {
+        partial = this.insertedTags.stream().noneMatch(tag -> BuiltInRegistries.BLOCK.getTag(tag).map(named -> named.contains(Holder.direct(block))).orElse(false));
+      } else {
+        partial = this.insertedTags.stream().anyMatch(tag -> BuiltInRegistries.BLOCK.getTag(tag).map(named -> named.contains(Holder.direct(block))).orElse(false));
+      }
+    }
+    if (this.not) {
+      return partial || this.insertedStates.stream().noneMatch(state -> state.getBlockState().getBlock() == block);
+    } else {
+      return partial || this.insertedStates.stream().anyMatch(state -> state.getBlockState().getBlock() == block);
+    }
   }
 
   public List<ItemStack> getStacks(int amount) {
@@ -172,7 +259,8 @@ public class BlockIngredient implements IIngredient<PartialBlockState> {
   }
 
   public List<ItemStack> getNonTagStacks(int amount) {
-    return uniqueStates()
+    return insertedStates
+        .stream()
         .map(PartialBlockState::getBlockState)
         .map(BlockState::getBlock)
         .map(Block::asItem)
@@ -183,7 +271,7 @@ public class BlockIngredient implements IIngredient<PartialBlockState> {
 
   public List<ItemStack> getTagStacks(int amount) {
     return Lists.newArrayList(
-        getTags()
+        insertedTags
             .stream()
             .flatMap(TagUtil::getBlocks)
             .map(Block::asItem)
@@ -193,18 +281,12 @@ public class BlockIngredient implements IIngredient<PartialBlockState> {
     );
   }
 
-  public Stream<PartialBlockState> uniqueStates() {
-    return getAll()
-        .stream()
-        .filter(state -> tags.stream().noneMatch(tag -> state.getBlockState().is(tag)));
-  }
-
   public List<Component> getNames() {
     List<Component> ingredients = Lists.newArrayList();
-    ingredients.addAll(this.tags.stream().map(TagKey::location).map(ResourceLocation::toString).map(s -> "#" + s).map(Component::literal).toList());
+    ingredients.addAll(this.insertedTags.stream().map(TagKey::location).map(ResourceLocation::toString).map(s -> "#" + s).map(Component::literal).toList());
 
     ingredients.addAll(
-        uniqueStates()
+        insertedStates.stream()
             .map(PartialBlockState::getName)
             .toList()
     );
@@ -212,53 +294,34 @@ public class BlockIngredient implements IIngredient<PartialBlockState> {
     return ingredients;
   }
 
-  public boolean isNotAir() {
-    return !this.equals(BlockIngredient.AIR) && this.getAll().stream().noneMatch(state -> state.equals(PartialBlockState.AIR));
-  }
-
-  public boolean isNotAny() {
-    return !this.equals(BlockIngredient.ANY) && this.getAll().stream().noneMatch(state -> state.equals(PartialBlockState.ANY));
-  }
-
-  public boolean isNotMachine() {
-    return this.equals(BlockIngredient.NOT_MACHINE) && this.getAll().stream().allMatch(state -> state.equals(PartialBlockState.NOT_MACHINE));
-  }
-
   public MutableComponent getNamesUnified() {
     MutableComponent name = Component.empty();
-    MutableComponent last = Component.empty();
     Component current;
     Iterator<Component> iterator = getNames().iterator();
-    if (getNames().size() > 1) {
-      name.append("[");
-      last.append("]");
+    if (not) {
+      name.append(Component.translatable("modular_machinery_reborn.jei.ingredient.structure.not"));
     }
     while (iterator.hasNext()) {
       current = iterator.next();
       name.append(current);
       if (iterator.hasNext()) {
-        name.append(", ");
+        name.append(Component.translatable("modular_machinery_reborn.jei.ingredient.structure.or"));
       }
     }
-    name.append(last);
     return name;
   }
 
   public String getString() {
-    List<String> ingredients = Lists.newArrayList();
-    ingredients.addAll(this.tags.stream().map(TagKey::location).map(ResourceLocation::toString).map(s -> "#" + s).toList());
+    Set<String> ings = Sets.newHashSet();
+    ings.addAll(this.insertedTags.stream().map(TagKey::location).map(ResourceLocation::toString).map(s -> "#" + s).toList());
 
-    ingredients.addAll(
-        uniqueStates()
-            .map(PartialBlockState::toString)
-            .toList()
-    );
+    ings.addAll(insertedStates.stream().map(PartialBlockState::toString).toList());
 
-    if (ingredients.size() == 1) {
-      return ingredients.get(0);
+    if (ings.size() == 1) {
+      return (this.not ? "!" : "") + ings.stream().toList().getFirst();
     }
 
-    return ingredients.toString();
+    return (this.not ? "!" : "") + ings;
   }
 
   @Override
@@ -267,55 +330,80 @@ public class BlockIngredient implements IIngredient<PartialBlockState> {
   }
 
   public BlockIngredient copyWithRotation(Rotation rotation) {
-    return new BlockIngredient(tags, getAll().stream().map(state -> state.copyWithRotation(rotation)).toList());
+    return new BlockIngredient(id, not, insertedTags, insertedStates.stream().map(state -> state.copyWithRotation(rotation)).toList());
   }
 
   public BlockIngredient merge(BlockIngredient other) {
     if (other == null) return AIR.merge(this);
-    List<PartialBlockState> ingredients = Lists.newArrayList();
-    ingredients.addAll(getAll());
-    ingredients.addAll(other.getAll());
-    List<TagKey<Block>> tags = Lists.newArrayList();
-    tags.addAll(this.tags);
-    tags.addAll(other.tags);
-    return new BlockIngredient(tags, ingredients);
+    Set<PartialBlockState> ingredients = Sets.newHashSet();
+    ingredients.addAll(insertedStates);
+    ingredients.addAll(other.insertedStates);
+    Set<TagKey<Block>> tags = Sets.newHashSet();
+    tags.addAll(this.insertedTags);
+    tags.addAll(other.insertedTags);
+    var i = id;
+    if (!i.isEmpty() && !other.id.isEmpty()) i += ",";
+    i += other.id;
+    return new BlockIngredient(i, other.not || not, tags.stream().toList(), ingredients.stream().toList());
   }
 
   @Override
   public JsonObject asJson() {
     JsonObject json = new JsonObject();
-    json.addProperty("isTag", isTag);
-    json.addProperty("tags", tags.toString());
+    json.addProperty("not", not);
+    json.addProperty("tags", insertedTags.toString());
     JsonArray array = new JsonArray();
-    getAll().forEach(state -> array.add(state.toString()));
+    insertedStates.forEach(state -> array.add(state.toString()));
     json.add("states", array);
     return json;
   }
 
   public CompoundTag asTag() {
     CompoundTag tag = new CompoundTag();
-    tag.putBoolean("isTag", isTag);
     ListTag tagList = new ListTag();
-    tags.forEach(t -> tagList.add(StringTag.valueOf(t.toString())));
+    tag.putBoolean("not", not);
+    insertedTags.forEach(t -> tagList.add(StringTag.valueOf(t.toString())));
     tag.put("tags", tagList);
     ListTag states = new ListTag();
-    getAll().forEach(state -> states.add(StringTag.valueOf(state.toString())));
+    insertedStates.forEach(state -> states.add(StringTag.valueOf(state.toString())));
     tag.put("states", states);
     return tag;
   }
 
-  public static BlockIngredient of(Object o) {
-    return (BlockIngredient) o;
+  public static BlockIngredient of(CharSequence s) throws CommandSyntaxException {
+    StringReader reader = new StringReader(s.toString());
+
+    reader.skipWhitespace();
+
+    if (!reader.getRemaining().contains("[") && reader.getRemaining().contains("]")) {
+      reader = new StringReader(reader.getRemaining().replaceAll("]", ""));
+    }
+
+    boolean not = false;
+
+    if (reader.peek() == '!') {
+      not = true;
+      reader.skip();
+    }
+
+    if (reader.peek() == '#') {
+      reader.skip();
+      TagKey<Block> tag = TagKey.create(Registries.BLOCK, ResourceLocation.parse(reader.getRemaining()));
+      return new BlockIngredient("#" + tag.location(), not, Collections.singletonList(tag), Collections.emptyList());
+    }
+
+    PartialBlockState state = PartialBlockState.of(reader.getRemaining());
+    return new BlockIngredient(state.toString(), not, Collections.emptyList(), Collections.singletonList(state));
   }
 
   @Override
   public boolean equals(Object o) {
     if (!(o instanceof BlockIngredient that)) return false;
-    return isTag == that.isTag && Objects.equals(partialBlockStates, that.partialBlockStates) && Objects.equals(tags, that.tags);
+    return this.not == that.not && Objects.equals(insertedStates, that.insertedStates) && Objects.equals(insertedTags, that.insertedTags);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(partialBlockStates, isTag, tags);
+    return Objects.hash(not, insertedStates, insertedTags);
   }
 }

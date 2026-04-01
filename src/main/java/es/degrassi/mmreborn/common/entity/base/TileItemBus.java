@@ -1,19 +1,28 @@
 package es.degrassi.mmreborn.common.entity.base;
 
+import com.google.common.collect.Maps;
 import es.degrassi.mmreborn.ModularMachineryReborn;
+import es.degrassi.mmreborn.api.capability.config.IOSideConfig;
+import es.degrassi.mmreborn.api.capability.config.IOSideMode;
+import es.degrassi.mmreborn.api.capability.config.ISideConfigComponent;
 import es.degrassi.mmreborn.api.controller.ControllerAccessible;
-import es.degrassi.mmreborn.client.model.hatch.HatchBakedModel;
+import es.degrassi.mmreborn.api.network.ISyncable;
+import es.degrassi.mmreborn.api.network.ISyncableStuff;
+import es.degrassi.mmreborn.api.network.syncable.IOSideConfigSyncable;
+import es.degrassi.mmreborn.client.integration.athena.model.hatch.HatchTextureData;
 import es.degrassi.mmreborn.common.block.prop.ItemBusSize;
 import es.degrassi.mmreborn.common.entity.ItemInputBusEntity;
+import es.degrassi.mmreborn.common.entity.MachineControllerEntity;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.MachineHatchType;
 import es.degrassi.mmreborn.common.machine.component.ItemComponent;
+import es.degrassi.mmreborn.common.manager.handler.AbstractHandler;
 import es.degrassi.mmreborn.common.network.server.SUpdateMachineTexturePacket;
 import es.degrassi.mmreborn.common.network.server.component.SUpdateItemComponentPacket;
 import es.degrassi.mmreborn.common.registration.MachineHatchTypeRegistration;
-import es.degrassi.mmreborn.common.util.IOInventory;
 import lombok.Getter;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -22,14 +31,20 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
+import java.util.Map;
+import java.util.function.Consumer;
 
 @Getter
-public abstract class TileItemBus extends TileInventory implements MachineComponentEntity<ItemComponent>, ControllerAccessible, TextureableMachineEntity {
-  private BlockPos controllerPos;
+public abstract class TileItemBus extends TileInventory implements MachineComponentEntity<ItemComponent>, ControllerAccessible, TextureableMachineEntity, ITickEntity,
+    IServerTickEntity, ISyncableStuff, IAutoEntity<IItemHandler>, ISideConfigComponent<IOSideMode> {
+  @Nullable private BlockPos controllerPos;
   private ItemBusSize size;
   private IOType ioType;
 
@@ -38,19 +53,26 @@ public abstract class TileItemBus extends TileInventory implements MachineCompon
   private ResourceLocation defaultOverlayTexture;
   @Getter
   private static final ResourceLocation defaultBaseTexture = ModularMachineryReborn.rl("block/casing_plain");
+  private final Map<Direction, BlockCapabilityCache<IItemHandler, Direction>> neighbourStorages = Maps.newEnumMap(Direction.class);
 
-  protected TileItemBus(BlockEntityType<?> entityType, BlockPos pos, BlockState blockState, ItemBusSize size,
-                   IOType ioType) {
-    super(entityType, pos, blockState, size.getSlotCount());
+  private final IOSideConfig config;
+
+  protected TileItemBus(BlockEntityType<?> entityType, BlockPos pos, BlockState blockState, ItemBusSize size, IOType ioType) {
+    super(entityType, pos, blockState, size.getSlotCount(), size.stackSize);
     this.size = size;
     this.ioType = ioType;
     this.defaultOverlayTexture = ModularMachineryReborn.rl("block/overlay_" + ioType.getSerializedName() + "bus_" + size.getSerializedName());
     this.overlayTexture = defaultOverlayTexture;
-    this.inventory.setListener(new IOInventory.IOInventoryChangedListener() {
+    this.inventory.setListener(new AbstractHandler.HandlerUpdateListener<>() {
       @Override
       public void onChange(int slot, ItemStack stack) {
-        if (getController() != null)
-          getController().getProcessor().setMachineInventoryChanged();
+        getControllerPosSet().forEach(p -> {
+          if (getLevel() == null) return;
+          if (getLevel().isClientSide()) return;
+          if (getLevel().getBlockEntity(p) instanceof MachineControllerEntity controller) {
+            controller.getProcessor().setMachineInventoryChanged();
+          }
+        });
         if (getLevel() instanceof ServerLevel l)
           PacketDistributor.sendToPlayersTrackingChunk(l, new ChunkPos(getBlockPos()),
               new SUpdateItemComponentPacket(slot, stack, getBlockPos()));
@@ -63,6 +85,8 @@ public abstract class TileItemBus extends TileInventory implements MachineCompon
         }
       }
     });
+    this.config = IOSideConfig.Template.DEFAULT_ALL_DISABLED.build(this);
+    this.config.setCallback(this::configChanged);
   }
 
   @Nullable
@@ -85,11 +109,16 @@ public abstract class TileItemBus extends TileInventory implements MachineCompon
     this.baseTexture = compound.contains("baseTexture") ? ResourceLocation.parse(compound.getString("baseTexture")) : defaultBaseTexture;
     this.overlayTexture = compound.contains("overlayTexture") ? ResourceLocation.parse(compound.getString("overlayTexture")) : defaultOverlayTexture;
 
-    this.inventory.setListener(new IOInventory.IOInventoryChangedListener() {
+    this.inventory.setListener(new AbstractHandler.HandlerUpdateListener<>() {
       @Override
       public void onChange(int slot, ItemStack stack) {
-        if (getController() != null)
-          getController().getProcessor().setMachineInventoryChanged();
+        getControllerPosSet().forEach(p -> {
+          if (getLevel() == null) return;
+          if (getLevel().isClientSide()) return;
+          if (getLevel().getBlockEntity(p) instanceof MachineControllerEntity controller) {
+            controller.getProcessor().setMachineInventoryChanged();
+          }
+        });
         if (getLevel() instanceof ServerLevel l)
           PacketDistributor.sendToPlayersTrackingChunk(l, new ChunkPos(getBlockPos()),
               new SUpdateItemComponentPacket(slot, stack, getBlockPos()));
@@ -102,6 +131,8 @@ public abstract class TileItemBus extends TileInventory implements MachineCompon
         }
       }
     });
+
+    this.config.deserialize(compound.getCompound("config"));
   }
 
   @Override
@@ -119,6 +150,7 @@ public abstract class TileItemBus extends TileInventory implements MachineCompon
       compound.putString("baseTexture", baseTexture.toString());
     if (overlayTexture != null)
       compound.putString("overlayTexture", overlayTexture.toString());
+    compound.put("config", this.config.serialize());
   }
 
   @Override
@@ -128,12 +160,20 @@ public abstract class TileItemBus extends TileInventory implements MachineCompon
 
   @Override
   public ModelData getModelData() {
-    ModelData.Builder builder = getModelDataBuilder("all");
-    builder.with(HatchBakedModel.BASE_TEXTURE, baseTexture)
-        .with(HatchBakedModel.BASE_TEXTURE_NAME, "bg_all");
-    builder.with(HatchBakedModel.OVERLAY_TEXTURE, overlayTexture)
-        .with(HatchBakedModel.OVERLAY_TEXTURE_NAME, "ov_all");
-    return builder.build();
+    return getModelDataBuilder("all").build();
+  }
+
+  @Override
+  public HatchTextureData getTextureData(String mode) {
+    return MachineComponentEntity.super.getTextureData(mode).derive(
+        "bg_all",
+        baseTexture,
+        defaultBaseTexture,
+        "ov_all",
+        overlayTexture,
+        defaultOverlayTexture,
+        false
+    );
   }
 
   @Override
@@ -200,5 +240,23 @@ public abstract class TileItemBus extends TileInventory implements MachineCompon
       }).get();
       default -> null;
     };
+  }
+
+  @Override
+  public void getStuffToSync(Consumer<ISyncable<?, ?>> container) {
+    container.accept(IOSideConfigSyncable.create(this::getConfig, this.config::set));
+  }
+
+  protected void moveStacks(IItemHandler from, IItemHandler to, int maxAmount) {
+    for (int i = 0; i < from.getSlots(); i++) {
+      ItemStack canExtract = from.extractItem(i, maxAmount, true);
+      if (canExtract.isEmpty()) continue;
+      ItemStack canInsert = ItemHandlerHelper.insertItemStacked(to, canExtract, false);
+      if (canInsert.isEmpty()) {
+        from.extractItem(i, maxAmount, false);
+      } else{
+        from.extractItem(i, canExtract.getCount() - canInsert.getCount(), false);
+      }
+    }
   }
 }

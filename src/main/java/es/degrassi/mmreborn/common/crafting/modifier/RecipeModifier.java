@@ -1,12 +1,13 @@
 package es.degrassi.mmreborn.common.crafting.modifier;
 
-import com.google.common.collect.Lists;
 import com.google.gson.JsonObject;
 import es.degrassi.mmreborn.ModularMachineryReborn;
 import es.degrassi.mmreborn.api.codec.NamedCodec;
 import es.degrassi.mmreborn.api.codec.RegistrarCodec;
+import es.degrassi.mmreborn.api.crafting.requirement.IRequirement;
 import es.degrassi.mmreborn.common.crafting.requirement.RequirementType;
 import es.degrassi.mmreborn.common.machine.IOType;
+import es.degrassi.mmreborn.common.machine.MachineComponent;
 import es.degrassi.mmreborn.common.registration.RequirementTypeRegistration;
 import lombok.Getter;
 import net.minecraft.nbt.CompoundTag;
@@ -14,49 +15,40 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 
-import java.util.List;
+import java.util.Objects;
 
 @Getter
-public abstract class RecipeModifier implements IRecipeModifier {
+public abstract class RecipeModifier<
+      R extends IRequirement<C, T>,
+      C extends MachineComponent<T>,
+      T
+    > implements IRecipeModifier<R, C, T> {
 
-  public static final NamedCodec<RecipeModifier> CODEC = NamedCodec.record(energyModifierInstance ->
-      energyModifierInstance.group(
-          RegistrarCodec.REQUIREMENT_NEW.fieldOf("requirement").forGetter(modifier -> modifier.requirementType),
-          IOType.CODEC.fieldOf("mode").forGetter(modifier -> modifier.mode),
+  public static final NamedCodec<RecipeModifier<?, ?, ?>> CODEC = NamedCodec.record(modifierInstance ->
+      modifierInstance.group(
+          RegistrarCodec.REQUIREMENT_NEW.fieldOf("requirement").forGetter(RecipeModifier::getRequirementType),
+          IOType.CODEC.fieldOf("mode").forGetter(RecipeModifier::getMode),
           OPERATION.CODEC.fieldOf("operation").forGetter(RecipeModifier::getOperation),
-          NamedCodec.FLOAT.fieldOf("modifier").forGetter(modifier -> modifier.modifier),
-          NamedCodec.FLOAT.optionalFieldOf("chance", 1.0F).forGetter(modifier -> modifier.chance),
-          NamedCodec.FLOAT.optionalFieldOf("max", Float.POSITIVE_INFINITY).forGetter(modifier -> modifier.max),
-          NamedCodec.FLOAT.optionalFieldOf("min", Float.NEGATIVE_INFINITY).forGetter(modifier -> modifier.min)
-      ).apply(energyModifierInstance, (requirement, mode, operation, modifier, chance, max, min) -> {
-        if(requirement == RequirementTypeRegistration.SPEED.get())
-          return new SpeedRecipeModifier(operation, modifier, chance, max, min);
-        return switch (operation) {
-          case ADDITION -> new AdditionRecipeModifier(requirement, mode, modifier, chance, max, min);
-          case MULTIPLICATION -> new MultiplicationRecipeModifier(requirement, mode, modifier, chance, max, min);
-        };
-      }), "Recipe modifier"
+          NamedCodec.FLOAT.fieldOf("modifier").forGetter(RecipeModifier::getModifier),
+          NamedCodec.FLOAT.optionalFieldOf("chance", 1.0F).forGetter(RecipeModifier::getChance),
+          NamedCodec.FLOAT.optionalFieldOf("max", Float.POSITIVE_INFINITY).forGetter(RecipeModifier::getMax),
+          NamedCodec.FLOAT.optionalFieldOf("min", Float.NEGATIVE_INFINITY).forGetter(RecipeModifier::getMin)
+      ).apply(modifierInstance, RecipeModifier::create), "Recipe modifier"
   );
 
-  public static final List<RequirementType<?>> blacklist = Lists.newArrayList();
-
-  static {
-    addToBlacklist(RequirementTypeRegistration.DIMENSION.get());
-    addToBlacklist(RequirementTypeRegistration.BIOME.get());
-    addToBlacklist(RequirementTypeRegistration.WEATHER.get());
-    addToBlacklist(RequirementTypeRegistration.TIME.get());
-    addToBlacklist(RequirementTypeRegistration.CHUNKLOAD.get());
-    addToBlacklist(RequirementTypeRegistration.FUNCTION.get());
-  }
-
-  public static void addToBlacklist(RequirementType<?> requirementType) {
-    if (blacklist.contains(requirementType)) return;
-    blacklist.add(requirementType);
+  public static RecipeModifier<?, ?, ?> create(RequirementType<?, ?, ?> requirement, IOType mode, OPERATION operation, float modifier, float chance, float max, float min) {
+    if(requirement == RequirementTypeRegistration.SPEED.get())
+      mode = IOType.INPUT;
+      //return new SpeedRecipeModifier(operation, modifier, chance, max, min);
+    return switch (operation) {
+      case ADDITION -> new AdditionRecipeModifier<>(requirement, mode, modifier, chance, max, min);
+      case MULTIPLICATION -> new MultiplicationRecipeModifier<>(requirement, mode, modifier, chance, max, min);
+    };
   }
 
   public static final RandomSource RAND = RandomSource.create();
 
-  public final RequirementType<?> requirementType;
+  public final RequirementType<R, C, T> requirementType;
   public final IOType mode;
   public final float modifier;
   public final float chance;
@@ -64,8 +56,9 @@ public abstract class RecipeModifier implements IRecipeModifier {
   public final float min;
   public final Component tooltip;
 
-  protected RecipeModifier(RequirementType<?> requirementType, IOType mode, float modifier, float chance, float max,
-                   float min) {
+  protected RecipeModifier(RequirementType<R, C, T> requirementType, IOType mode, float modifier, float chance, float max, float min) {
+    if (RecipeModifierTargetEvent.Blacklist.BLACKLIST.stream().anyMatch(c -> c.equals(requirementType)))
+      throw new UnsupportedOperationException("requirement type: " + requirementType.getId() + " is not a valid option for a Recipe Modifier");
     this.requirementType = requirementType;
     this.mode = mode;
     this.modifier = modifier;
@@ -76,7 +69,7 @@ public abstract class RecipeModifier implements IRecipeModifier {
   }
 
   @Override
-  public boolean shouldApply(RequirementType<?> type, IOType mode) {
+  public boolean shouldApply(RequirementType<R, C, T> type, IOType mode) {
     return type == this.requirementType
         && mode == this.mode
         && this.chance > RAND.nextDouble();
@@ -111,6 +104,6 @@ public abstract class RecipeModifier implements IRecipeModifier {
   }
 
   protected String getTargetValue() {
-    return ModularMachineryReborn.getRequirementRegistrar().getKey(requirementType).getPath();
+    return Objects.requireNonNull(ModularMachineryReborn.getRequirementRegistrar().getKey(requirementType)).getPath();
   }
 }

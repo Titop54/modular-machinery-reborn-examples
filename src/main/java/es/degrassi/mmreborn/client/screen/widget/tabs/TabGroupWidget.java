@@ -3,9 +3,11 @@ package es.degrassi.mmreborn.client.screen.widget.tabs;
 import com.google.common.collect.Lists;
 import com.mojang.datafixers.util.Either;
 import es.degrassi.mmreborn.client.screen.widget.ItemOrIconButton;
+import lombok.Getter;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.world.inventory.tooltip.TooltipComponent;
@@ -17,56 +19,41 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @ParametersAreNonnullByDefault
-@SuppressWarnings("unused")
-public class TabGroupWidget extends AbstractWidget {
-  private final List<TabWidget> tabs = Lists.newArrayList();
-  private final AtomicInteger lastX = new AtomicInteger();
+public abstract class TabGroupWidget extends AbstractWidget {
+  @Getter
+  protected final List<TabWidget> tabs = Lists.newArrayList();
+  protected final AtomicInteger lastX = new AtomicInteger();
+  protected final AtomicInteger lastY = new AtomicInteger();
 
-  public TabGroupWidget(int x, int y) {
-    super(x, y, 0, 0, Component.empty());
+  public TabGroupWidget(int x, int y, int width, int height, Component message) {
+    super(x, y, width, height, message);
     this.lastX.set(x);
+    this.lastY.set(y);
   }
 
   @Override
-  public int getWidth() {
-    return tabs.stream().mapToInt(TabWidget::getWidth).sum();
-  }
+  public abstract int getWidth();
 
   @Override
-  public int getHeight() {
-    return tabs.stream().mapToInt(TabWidget::getHeight).max().orElse(1);
-  }
+  public abstract int getHeight();
 
   public TabGroupWidget addTab(TabWidget tab) {
     return addTab(0, 0, tab);
   }
 
-  public TabGroupWidget addTab(int xOffset, int yOffset, TabWidget tab) {
-    tab.setX(lastX.getAndAdd(tab.getWidth() + xOffset));
-    tab.setY(this.getY() + yOffset);
-    tabs.add(tab);
-    return this;
-  }
+  public abstract TabGroupWidget addTab(int xOffset, int yOffset, TabWidget tab);
 
   public TabGroupWidget addTab(ItemOrIconButton icon, @Nullable TabWidget.OnClick action) {
-   return addTab(0, 0, icon, action);
+    return addTab(0, 0, icon, action);
   }
 
-  public TabGroupWidget addTab(int xOffset, int yOffset, ItemOrIconButton icon, @Nullable TabWidget.OnClick action) {
-    TabWidget tab = new TabWidget(lastX.get() + xOffset, getY() + yOffset, icon, action);
-    lastX.getAndAdd(tab.getWidth() + xOffset);
-    return addTab(tab);
-  }
+  public abstract TabGroupWidget addTab(int xOffset, int yOffset, ItemOrIconButton icon, @Nullable TabWidget.OnClick action);
 
   public TabGroupWidget addTab(ItemOrIconButton icon) {
     return addTab(0, 0, icon);
   }
 
-  public TabGroupWidget addTab(int xOffset, int yOffset, ItemOrIconButton icon) {
-    TabWidget tab = new TabWidget(lastX.get() + xOffset, getY() + yOffset, icon);
-    lastX.getAndAdd(tab.getWidth() + xOffset);
-    return addTab(tab);
-  }
+  public abstract TabGroupWidget addTab(int xOffset, int yOffset, ItemOrIconButton icon);
 
   @Override
   protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
@@ -76,6 +63,13 @@ public class TabGroupWidget extends AbstractWidget {
   @Override
   protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
     tabs.forEach(tab -> tab.updateWidgetNarration(narrationElementOutput));
+  }
+
+  public void playDownSound(SoundManager handler) {}
+
+  @Override
+  public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    return getTabUnderMouse(mouseX, mouseY).map(tab -> tab.mouseClicked(mouseX, mouseY, button)).orElse(false);
   }
 
   @Override
@@ -100,5 +94,21 @@ public class TabGroupWidget extends AbstractWidget {
 
   public void gatherComponents(List<Either<FormattedText, TooltipComponent>> components) {
     tabs.forEach(tab -> tab.gatherComponents(components));
+  }
+
+  public static LeftTabGroupWidget createLeft(int x, int y) {
+    return new LeftTabGroupWidget(x, y);
+  }
+
+  public static RightTabGroupWidget createRight(int x, int y) {
+    return new RightTabGroupWidget(x, y);
+  }
+
+  public static TopTabGroupWidget createTop(int x, int y) {
+    return new TopTabGroupWidget(x, y);
+  }
+
+  public static BottomTabGroupWidget createBottom(int x, int y) {
+    return new BottomTabGroupWidget(x, y);
   }
 }

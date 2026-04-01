@@ -1,6 +1,6 @@
 package es.degrassi.mmreborn.client.container;
 
-import es.degrassi.mmreborn.common.util.ItemSlot;
+import es.degrassi.mmreborn.common.manager.handler.slot.ItemSlot;
 import lombok.Getter;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -44,6 +44,17 @@ public class SlotItemComponent extends Slot {
 
   @Override
   public void setChanged() {
-    this.component.getManager().setChanged();
+    this.component.setChanged();
+  }
+
+  @Override
+  public String toString() {
+    return "SlotItemComponent{" +
+        "component=" + component +
+        ", index=" + index +
+        ", slot=" + getSlotIndex() +
+        ", x=" + x +
+        ", y=" + y +
+        '}';
   }
 }

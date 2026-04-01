@@ -1,6 +1,6 @@
 package es.degrassi.mmreborn.common.entity.base;
 
-import es.degrassi.mmreborn.common.util.IOInventory;
+import es.degrassi.mmreborn.common.manager.handler.ItemHandler;
 import lombok.Getter;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
@@ -9,7 +9,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
 
@@ -17,7 +16,7 @@ import java.util.List;
 @ParametersAreNonnullByDefault
 @MethodsReturnNonnullByDefault
 public abstract class TileInventory extends ColorableMachineComponentEntity implements ItemDroppeable {
-  protected final IOInventory inventory;
+  protected final ItemHandler inventory;
   private final int slots;
 
   protected TileInventory(BlockEntityType<?> entityType, BlockPos pos, BlockState blockState, int slots) {
@@ -26,7 +25,17 @@ public abstract class TileInventory extends ColorableMachineComponentEntity impl
     this.slots = slots;
   }
 
-  public abstract IOInventory buildInventory(int slots);
+  protected TileInventory(BlockEntityType<?> entityType, BlockPos pos, BlockState blockState, int slots, int stackSize) {
+    super(entityType, pos, blockState);
+    this.inventory = buildInventory(slots, stackSize);
+    this.slots = slots;
+  }
+
+  public ItemHandler buildInventory(int slots) {
+    return buildInventory(slots, 64);
+  }
+
+  public abstract ItemHandler buildInventory(int slots, int slotLimit);
 
   @Override
   protected void loadAdditional(CompoundTag compound, HolderLookup.Provider pRegistries) {

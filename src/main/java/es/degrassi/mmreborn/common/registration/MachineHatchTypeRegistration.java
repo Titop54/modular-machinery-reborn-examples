@@ -261,6 +261,63 @@ public class MachineHatchTypeRegistration {
       MACHINE_COMPONENTS.register(rootLC("DURABILITY_HATCH_BIG".toLowerCase(Locale.ENGLISH)),
       MachineHatchType::create);
 
+  public static final Supplier<MachineHatchType> FUEL_TANK_TINY =
+      MACHINE_COMPONENTS.register(rootLC("FUEL_TANK_TINY".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> FUEL_TANK_SMALL =
+      MACHINE_COMPONENTS.register(rootLC("FUEL_TANK_SMALL".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> FUEL_TANK_NORMAL =
+      MACHINE_COMPONENTS.register(rootLC("FUEL_TANK_NORMAL".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> FUEL_TANK_REINFORCED =
+      MACHINE_COMPONENTS.register(rootLC("FUEL_TANK_REINFORCED".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> FUEL_TANK_BIG =
+      MACHINE_COMPONENTS.register(rootLC("FUEL_TANK_BIG".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> FUEL_TANK_HUGE =
+      MACHINE_COMPONENTS.register(rootLC("FUEL_TANK_HUGE".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+
+  public static final Supplier<MachineHatchType> EFFECT_DISPENSER_SMALL =
+      MACHINE_COMPONENTS.register(rootLC("EFFECT_DISPENSER_SMALL".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> EFFECT_DISPENSER_MEDIUM =
+      MACHINE_COMPONENTS.register(rootLC("EFFECT_DISPENSER_MEDIUM".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> EFFECT_DISPENSER_BIG =
+      MACHINE_COMPONENTS.register(rootLC("EFFECT_DISPENSER_BIG".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+
+  public static final Supplier<MachineHatchType> ENTITY_DETECTOR =
+      MACHINE_COMPONENTS.register(rootLC("ENTITY_DETECTOR".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> ENTITY_SPAWNER =
+      MACHINE_COMPONENTS.register(rootLC("ENTITY_SPAWNER".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> ENTITY_KILLER =
+      MACHINE_COMPONENTS.register(rootLC("ENTITY_KILLER".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> ENTITY_HEALER =
+      MACHINE_COMPONENTS.register(rootLC("ENTITY_HEALER".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+  public static final Supplier<MachineHatchType> ENTITY_DAMAGER =
+      MACHINE_COMPONENTS.register(rootLC("ENTITY_DAMAGER".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+
+  public static final Supplier<MachineHatchType> STRUCTURE_CHECKER =
+      MACHINE_COMPONENTS.register(rootLC("STRUCTURE_CHECKER".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+
+  public static final Supplier<MachineHatchType> REDSTONE_PORT =
+      MACHINE_COMPONENTS.register(rootLC("REDSTONE_PORT".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+
+  public static final Supplier<MachineHatchType> COMMAND_EXECUTIONER =
+      MACHINE_COMPONENTS.register(rootLC("COMMAND_EXECUTIONER".toLowerCase(Locale.ENGLISH)),
+      MachineHatchType::create);
+
   public static void register(final IEventBus bus) {
     MACHINE_COMPONENTS.register(bus);
   }

@@ -1,27 +1,29 @@
 package es.degrassi.mmreborn.common.integration.kubejs.function;
 
-import dev.latvian.mods.kubejs.level.BlockContainerJS;
+import dev.latvian.mods.kubejs.level.CachedLevelBlock;
 import dev.latvian.mods.rhino.Wrapper;
 import es.degrassi.mmreborn.common.entity.MachineControllerEntity;
 import es.degrassi.mmreborn.common.machine.IOType;
-import es.degrassi.mmreborn.common.machine.component.ChunkloadComponent;
+import es.degrassi.mmreborn.common.machine.MachineComponent;
 import es.degrassi.mmreborn.common.machine.component.EnergyComponent;
 import es.degrassi.mmreborn.common.machine.component.FluidComponent;
 import es.degrassi.mmreborn.common.machine.component.ItemComponent;
+import es.degrassi.mmreborn.common.manager.handler.ItemHandler;
 import es.degrassi.mmreborn.common.registration.ComponentRegistration;
 import es.degrassi.mmreborn.common.util.Chunkloader;
 import es.degrassi.mmreborn.common.util.IEnergyHandler;
-import es.degrassi.mmreborn.common.util.IOInventory;
-import es.degrassi.mmreborn.common.util.ItemSlot;
+import es.degrassi.mmreborn.common.manager.handler.slot.ItemSlot;
 import es.degrassi.mmreborn.common.util.TaskDelayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.crafting.SingleFluidIngredient;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,7 +43,7 @@ public class MachineControllerJS {
     if (o instanceof BlockEntity be && be instanceof MachineControllerEntity mce) {
       return new MachineControllerJS(mce);
     }
-    if (o instanceof BlockContainerJS bc) {
+    if (o instanceof CachedLevelBlock bc) {
       return of(bc.getEntity());
     }
     return null;
@@ -54,10 +56,7 @@ public class MachineControllerJS {
   public void setId(String id) {
     ResourceLocation loc = ResourceLocation.tryParse(id);
     if (loc != null) {
-      TaskDelayer.enqueue(0, () -> {
-        this.internal.getProcessor().reset();
-        this.internal.setMachine(loc);
-      });
+      TaskDelayer.enqueue(0, () -> this.internal.setMachine(loc));
     } else {
       throw new IllegalArgumentException("Invalid machine ID: " + id);
     }
@@ -158,7 +157,8 @@ public class MachineControllerJS {
         .filter(c -> c instanceof FluidComponent)
         .map(c -> (FluidComponent) c)
         .filter(c -> c.getIOType().equals(mode))
-        .map(c -> c.getContainerProvider().getFluid())
+        .map(c -> Arrays.asList(c.getContainerProvider().getFluidStacks()))
+        .flatMap(List::stream)
         .toList();
   }
 
@@ -180,7 +180,7 @@ public class MachineControllerJS {
         .filter(c -> c instanceof FluidComponent)
         .map(c -> (FluidComponent) c)
         .filter(c -> c.getIOType().equals(mode))
-        .filter(c -> FluidStack.isSameFluidSameComponents(c.getContainerProvider().getFluid(), fluid))
+        .filter(c -> c.getContainerProvider().contains(SingleFluidIngredient.of(fluid)))
         .mapToInt(c -> c.getContainerProvider().getCapacity())
         .sum();
   }
@@ -192,7 +192,6 @@ public class MachineControllerJS {
    * @return fluid added
    */
   public int addFluid(FluidStack stack) {
-    AtomicReference<FluidStack> fluid = new AtomicReference<>(stack);
     AtomicInteger filled = new AtomicInteger(0);
     this.internal.getComponentManager()
         .getFoundComponentsList()
@@ -200,13 +199,18 @@ public class MachineControllerJS {
         .filter(c -> c instanceof FluidComponent)
         .map(c -> (FluidComponent) c)
         .filter(c -> !c.getIOType().isInput())
-        .filter(c -> c.getContainerProvider().isEmpty() || FluidStack.isSameFluidSameComponents(c.getContainerProvider().getFluid(), stack))
-        .forEach(c -> {
-          if (fluid.get().isEmpty()) return;
-          if (fluid.get().getAmount() <= 0) return;
-          int inserted = c.getContainerProvider().fill(fluid.get(), IFluidHandler.FluidAction.EXECUTE);
-          fluid.get().shrink(inserted);
-          filled.getAndAdd(inserted);
+        .reduce(FluidComponent::merge)
+        .ifPresent(c -> {
+          AtomicInteger toAdd = new AtomicInteger(stack.getAmount());
+          c.getContainerProvider().getOutputs().stream()
+              .filter(component -> c.getContainerProvider().canPlaceOutput(component, stack))
+              .forEach(component -> {
+                int maxInsert = toAdd.get() - component.insertFluidBypassLimit(stack, true).getAmount();
+                toAdd.addAndGet(-maxInsert);
+                filled.addAndGet(maxInsert);
+                component.insertFluidBypassLimit(stack.copyWithAmount(maxInsert), false);
+                component.setChanged();
+              });
         });
 
     return filled.get();
@@ -218,8 +222,7 @@ public class MachineControllerJS {
    * @return fluid extracted
    */
   public FluidStack removeFluid(FluidStack stack) {
-    AtomicReference<FluidStack> fluid = new AtomicReference<>(stack);
-    AtomicReference<FluidStack> extracted = new AtomicReference<>(FluidStack.EMPTY);
+    AtomicInteger extracted = new AtomicInteger();
 
     this.internal.getComponentManager()
         .getFoundComponentsList()
@@ -227,20 +230,18 @@ public class MachineControllerJS {
         .filter(c -> c instanceof FluidComponent)
         .map(c -> (FluidComponent) c)
         .filter(c -> c.getIOType().isInput())
-        .filter(c -> FluidStack.isSameFluidSameComponents(c.getContainerProvider().getFluid(), stack))
-        .forEach(c -> {
-          if (fluid.get().isEmpty()) return;
-          if (c.getContainerProvider().isEmpty()) return;
-          FluidStack drained = c.getContainerProvider().drain(fluid.get(), IFluidHandler.FluidAction.EXECUTE);
-          fluid.get().shrink(drained.getAmount());
-          if (extracted.get().isEmpty())
-            extracted.set(drained);
-          else {
-            extracted.get().grow(drained.getAmount());
-          }
+        .reduce(FluidComponent::merge)
+        .ifPresent(c -> {
+          var handler = c.getContainerProvider();
+          AtomicInteger toRemove = new AtomicInteger(stack.getAmount());
+          if (toRemove.get() <= 0) return;
+          int maxExtract = Math.min(handler.getFluidAmount(stack), toRemove.get());
+          toRemove.addAndGet(-maxExtract);
+          extracted.addAndGet(maxExtract);
+          handler.removeFromInputs(stack, maxExtract);
         });
 
-    return extracted.get();
+    return stack.copyWithAmount(extracted.get());
   }
 
   /** ITEM STUFF **/
@@ -253,7 +254,7 @@ public class MachineControllerJS {
         .map(c -> (ItemComponent) c)
         .filter(c -> c.getIOType().equals(mode))
         .map(ItemComponent::getContainerProvider)
-        .map(IOInventory::getInventory)
+        .map(ItemHandler::getInventory)
         .map(c -> c.stream().map(ItemSlot::getItemStack).toList())
         .flatMap(List::stream)
         .toList();
@@ -327,38 +328,77 @@ public class MachineControllerJS {
     return extracted.get();
   }
 
+  /** FUEL STUFF **/
+  public long getFuelAmount() throws ExecutionException {
+    return internal.getComponentManager()
+        .getComponent(ComponentRegistration.COMPONENT_FUEL.get(), IOType.INPUT)
+        .stream()
+        .mapToLong(comp -> comp.getContainerProvider().getFuel())
+        .sum();
+  }
+
+  public long getFuelCapacity() throws ExecutionException {
+    return internal.getComponentManager()
+        .getComponent(ComponentRegistration.COMPONENT_FUEL.get(), IOType.INPUT)
+        .stream()
+        .mapToLong(comp -> comp.getContainerProvider().getMaxFuel())
+        .sum();
+  }
+
+  public void addFuel(long amount) throws ExecutionException {
+    AtomicLong amt = new AtomicLong(amount);
+    internal.getComponentManager()
+        .getComponent(ComponentRegistration.COMPONENT_FUEL.get(), IOType.INPUT)
+        .map(MachineComponent::getContainerProvider)
+        .ifPresent(comp -> {
+          if (amt.get() <= 0) return;
+          long toInsert = Math.min(comp.getMaxFuel() - comp.getFuel(), amt.get());
+          amt.addAndGet(-toInsert);
+          comp.addFuel(toInsert);
+        });
+  }
+
+  public void removeFuel(long amount) throws ExecutionException {
+    AtomicLong amt = new AtomicLong(amount);
+    internal.getComponentManager()
+        .getComponent(ComponentRegistration.COMPONENT_FUEL.get(), IOType.INPUT)
+        .map(MachineComponent::getContainerProvider)
+        .ifPresent(comp -> {
+          if (amt.get() <= 0) return;
+          long toRemove = Math.min(comp.getFuel(), amt.get());
+          amt.addAndGet(-toRemove);
+          comp.removeFuel(toRemove);
+        });
+  }
+
   /** CHUNKLOAD STUFF **/
 
-  public void enableChunkload(int radius) {
+  public void enableChunkload(int radius) throws ExecutionException {
     this.internal.getComponentManager()
         .getComponent(ComponentRegistration.COMPONENT_CHUNKLOAD.get(), IOType.OUTPUT)
-        .map(c -> (ChunkloadComponent) c)
-        .map(ChunkloadComponent::getContainerProvider)
+        .map(MachineComponent::getContainerProvider)
         .ifPresent(component -> component.setActive((ServerLevel) this.internal.getLevel(), radius));
   }
 
-  public void disableChunkload() {
+  public void disableChunkload() throws ExecutionException {
     this.internal.getComponentManager()
         .getComponent(ComponentRegistration.COMPONENT_CHUNKLOAD.get(), IOType.OUTPUT)
-        .map(c -> (ChunkloadComponent) c)
-        .map(ChunkloadComponent::getContainerProvider)
+        .map(MachineComponent::getContainerProvider)
         .ifPresent(component -> component.setInactive((ServerLevel) this.internal.getLevel()));
   }
 
-  public boolean isChunkloadEnabled() {
+  public boolean isChunkloadEnabled() throws ExecutionException {
     return this.internal.getComponentManager()
         .getComponent(ComponentRegistration.COMPONENT_CHUNKLOAD.get(), IOType.OUTPUT)
-        .map(c -> (ChunkloadComponent) c)
-        .map(ChunkloadComponent::getContainerProvider)
+        .map(MachineComponent::getContainerProvider)
         .map(Chunkloader::isActive)
         .orElse(false);
   }
 
-  public int getChunkloadRadius() {
+  public int getChunkloadRadius() throws ExecutionException {
     return this.internal.getComponentManager()
         .getComponent(ComponentRegistration.COMPONENT_CHUNKLOAD.get(), IOType.OUTPUT)
-        .map(c -> (ChunkloadComponent) c)
-        .map(ChunkloadComponent::getContainerProvider)
+        .map(MachineComponent::getContainerProvider)
         .map(Chunkloader::getRadius)
         .orElse(0);
   }

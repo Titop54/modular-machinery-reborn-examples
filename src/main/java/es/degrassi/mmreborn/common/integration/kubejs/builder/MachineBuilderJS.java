@@ -14,7 +14,7 @@ import es.degrassi.mmreborn.common.data.Config;
 import es.degrassi.mmreborn.common.data.MMRConfig;
 import es.degrassi.mmreborn.common.machine.DynamicMachine;
 import es.degrassi.mmreborn.common.machine.MachineHatchType;
-import es.degrassi.mmreborn.common.machine.Sounds;
+import es.degrassi.mmreborn.common.util.sound.Sounds;
 import es.degrassi.mmreborn.common.manager.crafting.MachineStatus;
 import es.degrassi.mmreborn.common.util.MachineModelLocation;
 import lombok.Getter;
@@ -35,16 +35,17 @@ public class MachineBuilderJS {
   private String color;
   private Integer intColor;
   private StructureBuilderJS structure;
-  private MachineModelLocation controllerModel;
+  private final Map<MachineStatus, MachineModelLocation> controllerModels;
   private final List<ModifierReplacement> modifiers;
   private final Map<MachineStatus, Sounds> sounds;
   private final Map<MachineHatchType, Pair<Boolean, Pair<Optional<ResourceLocation>, Optional<ResourceLocation>>>> textureMap;
 
-  public MachineBuilderJS(@NotNull ResourceLocation id) {
+  public MachineBuilderJS(ResourceLocation id) {
     this.id = id;
     modifiers = Lists.newArrayList();
     sounds = Maps.newEnumMap(MachineStatus.class);
     textureMap = Maps.newHashMap();
+    controllerModels = Maps.newEnumMap(MachineStatus.class);
   }
 
   public MachineBuilderJS name(String name) {
@@ -68,7 +69,13 @@ public class MachineBuilderJS {
   }
 
   public MachineBuilderJS controllerModel(MachineModelLocation modelLocation) {
-    this.controllerModel = modelLocation;
+    for (var status : MachineStatus.values())
+      controllerModel(status, modelLocation);
+    return this;
+  }
+
+  public MachineBuilderJS controllerModel(MachineStatus status, MachineModelLocation modelLocation) {
+    this.controllerModels.put(status, modelLocation);
     return this;
   }
 
@@ -97,23 +104,12 @@ public class MachineBuilderJS {
   public DynamicMachine build() {
     DynamicMachine machine = new DynamicMachine(id, sounds, textureMap);
     machine.setPattern(structure == null ? Structure.EMPTY : structure.build(modifiers));
-    machine.setControllerModel(Objects.requireNonNullElse(controllerModel, MachineModelLocation.DEFAULT));
+    machine.setControllerModels(controllerModels);
     machine.setLocalizedName(Optional.ofNullable(name));
     if (intColor != null)
       machine.setDefinedColor(intColor);
     else if(color != null)
       machine.setDefinedColor(DefaultCodecs.HEX.decode(JsonOps.INSTANCE, new JsonPrimitive(color)).result().orElse(new Pair<>(Config.toInt(MMRConfig.get().general_casing_color.get(), 0xFF4900), null)).getFirst());
     return machine;
-  }
-
-  @Getter
-  public static class MachineKubeEvent implements KubeEvent {
-    private final List<MachineBuilderJS> builders = Lists.newArrayList();
-
-    public MachineBuilderJS create(ResourceLocation id) {
-      MachineBuilderJS builder = new MachineBuilderJS(id);
-      builders.add(builder);
-      return builder;
-    }
   }
 }

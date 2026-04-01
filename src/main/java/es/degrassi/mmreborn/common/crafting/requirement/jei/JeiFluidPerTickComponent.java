@@ -10,6 +10,7 @@ import es.degrassi.mmreborn.common.integration.jei.MMRJeiPlugin;
 import es.degrassi.mmreborn.common.integration.jei.category.MMRRecipeCategory;
 import es.degrassi.mmreborn.common.integration.jei.category.drawable.DrawableWrappedText;
 import es.degrassi.mmreborn.common.machine.component.FluidComponent;
+import es.degrassi.mmreborn.common.manager.handler.FluidHandler;
 import es.degrassi.mmreborn.common.util.Utils;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.recipe.IFocusGroup;
@@ -19,15 +20,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.neoforge.fluids.FluidStack;
-import org.jetbrains.annotations.NotNull;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
 public class JeiFluidPerTickComponent extends JeiComponent<FluidStack, RecipeRequirement<FluidComponent,
-    RequirementFluidPerTick>> {
-  public JeiFluidPerTickComponent(RecipeRequirement<FluidComponent, RequirementFluidPerTick> requirement) {
+    RequirementFluidPerTick, FluidHandler>> {
+  public JeiFluidPerTickComponent(RecipeRequirement<FluidComponent, RequirementFluidPerTick, FluidHandler> requirement) {
     super(requirement, 0, 0);
   }
 
@@ -43,12 +43,11 @@ public class JeiFluidPerTickComponent extends JeiComponent<FluidStack, RecipeReq
 
   @Override
   public List<FluidStack> ingredients() {
-    return Collections.singletonList(requirement.requirement().required.asFluidStack());
+    return Arrays.stream(requirement.requirement().getIngredient().getFluids()).toList();
   }
 
   @Override
-  @SuppressWarnings("removal")
-  public @NotNull List<Component> getTooltip(@NotNull FluidStack ingredient, @NotNull TooltipFlag tooltipFlag) {
+  public List<Component> getTooltip(FluidStack ingredient, TooltipFlag tooltipFlag) {
     List<Component> tooltip = super.getTooltip(ingredient, tooltipFlag);
     String mode = requirement.requirement().getMode().isInput() ? "input" : "output";
     tooltip.add(Component.translatable("modular_machinery_reborn.jei.ingredient.fluid." + mode, ingredient.getHoverName(), ingredient.getAmount()));
@@ -74,6 +73,7 @@ public class JeiFluidPerTickComponent extends JeiComponent<FluidStack, RecipeReq
 
   @Override
   public void setRecipe(MMRRecipeCategory category, IRecipeLayoutBuilder builder, MachineRecipe recipe, IFocusGroup focuses) {
+    int fluid = (int) (System.currentTimeMillis() / 1000 % ingredients().size());
     Component component = Component.empty();
     String chance = Utils.decimalFormat(requirement.chance() * 100);
     if (requirement.chance() > 0 && requirement.chance() < 1)
@@ -109,8 +109,8 @@ public class JeiFluidPerTickComponent extends JeiComponent<FluidStack, RecipeReq
             -1,
             -1
         )
-        .setFluidRenderer(getRequirement().requirement().amount, false, getWidth(), getHeight())
-        .addFluidStack(getRequirement().requirement().required.asFluidStack().getFluid(), getRequirement().requirement().amount)
+        .setFluidRenderer(getRequirement().requirement().getIngredient().amount(), false, getWidth(), getHeight())
+        .addFluidStack(ingredients().get(fluid).getFluid(), getRequirement().requirement().getIngredient().amount())
         .addRichTooltipCallback((view, tooltip) -> {
           tooltip.add(Component.translatable("modular_machinery_reborn.ingredient.perTick"));
           if (requirement.chance() > 0 && requirement.chance() < 1)

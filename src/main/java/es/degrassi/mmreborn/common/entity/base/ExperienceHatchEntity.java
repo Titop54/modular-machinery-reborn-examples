@@ -1,24 +1,33 @@
 package es.degrassi.mmreborn.common.entity.base;
 
+import com.google.common.collect.Maps;
 import es.degrassi.experiencelib.api.capability.ExperienceLibCapabilities;
 import es.degrassi.experiencelib.api.capability.IExperienceHandler;
 import es.degrassi.experiencelib.impl.capability.BasicExperienceHandler;
 import es.degrassi.mmreborn.ModularMachineryReborn;
+import es.degrassi.mmreborn.api.capability.config.IOSideConfig;
+import es.degrassi.mmreborn.api.capability.config.IOSideMode;
+import es.degrassi.mmreborn.api.capability.config.ISideConfigComponent;
 import es.degrassi.mmreborn.api.controller.ControllerAccessible;
-import es.degrassi.mmreborn.client.model.hatch.HatchBakedModel;
+import es.degrassi.mmreborn.api.network.ISyncable;
+import es.degrassi.mmreborn.api.network.ISyncableStuff;
+import es.degrassi.mmreborn.api.network.syncable.IOSideConfigSyncable;
+import es.degrassi.mmreborn.client.integration.athena.model.hatch.HatchTextureData;
 import es.degrassi.mmreborn.common.block.prop.ExperienceHatchSize;
 import es.degrassi.mmreborn.common.entity.ExperienceInputHatchEntity;
+import es.degrassi.mmreborn.common.entity.MachineControllerEntity;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.MachineHatchType;
 import es.degrassi.mmreborn.common.machine.component.ExperienceComponent;
+import es.degrassi.mmreborn.common.manager.handler.ItemHandler;
 import es.degrassi.mmreborn.common.network.server.SUpdateMachineTexturePacket;
 import es.degrassi.mmreborn.common.network.server.component.SUpdateExperienceComponentPacket;
 import es.degrassi.mmreborn.common.registration.MachineHatchTypeRegistration;
-import es.degrassi.mmreborn.common.util.IOInventory;
 import es.degrassi.mmreborn.common.util.Utils;
 import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -29,20 +38,24 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import net.neoforged.neoforge.capabilities.ItemCapability;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 public abstract class ExperienceHatchEntity extends ColorableMachineComponentEntity implements MachineComponentEntity<ExperienceComponent>,
-    ControllerAccessible, TextureableMachineEntity, CapabilityInventoryEntity<IExperienceHandler>, ITickEntity, IServerTickEntity {
+    ControllerAccessible, TextureableMachineEntity, CapabilityInventoryEntity<IExperienceHandler>, ITickEntity, IServerTickEntity, ISyncableStuff,
+    IAutoEntity<IExperienceHandler>, ISideConfigComponent<IOSideMode> {
   protected ExperienceHatchSize size;
   protected IOType ioType;
   @Getter
-  private BlockPos controllerPos;
+  @Nullable private BlockPos controllerPos;
 
   private final BasicExperienceHandler experienceTank;
 
@@ -57,10 +70,16 @@ public abstract class ExperienceHatchEntity extends ColorableMachineComponentEnt
   @Getter
   private static final ResourceLocation defaultBaseTexture = ModularMachineryReborn.rl("block/casing_plain");
   @Getter
-  private final IOInventory capabilityInventory;
+  private final ItemHandler capabilityInventory;
 
   private final long tickOffset = Utils.RAND.nextIntBetweenInclusive(0, Integer.MAX_VALUE - 1);
   private long lastCheckTick;
+
+  @Getter
+  private final Map<Direction, BlockCapabilityCache<IExperienceHandler, Direction>> neighbourStorages = Maps.newEnumMap(Direction.class);
+
+  @Getter
+  private final IOSideConfig config;
 
   protected ExperienceHatchEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, ExperienceHatchSize size,
                           IOType ioType) {
@@ -70,7 +89,9 @@ public abstract class ExperienceHatchEntity extends ColorableMachineComponentEnt
     this.defaultOverlayTexture = ModularMachineryReborn.rl("block/overlay_experience" + ioType.getSerializedName() + "hatch_" + size.getSerializedName());
     this.overlayTexture = defaultOverlayTexture;
     this.experienceTank = buildTank();
+    this.config = IOSideConfig.Template.DEFAULT_ALL_DISABLED.build(this);
     this.capabilityInventory = this.createCapabilityInventory();
+    this.config.setCallback(this::configChanged);
   }
 
   @Override
@@ -175,8 +196,13 @@ public abstract class ExperienceHatchEntity extends ColorableMachineComponentEnt
                 new ChunkPos(getBlockPos()),
                 new SUpdateExperienceComponentPacket(getTank().getExperience(), getBlockPos())
             );
-          if (getController() != null)
-            getController().getProcessor().setMachineInventoryChanged();
+          getControllerPosSet().forEach(p -> {
+            if (getLevel() == null) return;
+            if (getLevel().isClientSide()) return;
+            if (getLevel().getBlockEntity(p) instanceof MachineControllerEntity controller) {
+              controller.getProcessor().setMachineInventoryChanged();
+            }
+          });
         }
     ) {
       @Override
@@ -230,6 +256,7 @@ public abstract class ExperienceHatchEntity extends ColorableMachineComponentEnt
     this.baseTexture = compound.contains("baseTexture") ? ResourceLocation.parse(compound.getString("baseTexture")) : defaultBaseTexture;
     this.overlayTexture = compound.contains("overlayTexture") ? ResourceLocation.parse(compound.getString("overlayTexture")) : defaultOverlayTexture;
     this.capabilityInventory.deserialize(compound.getCompound("inventory"), pRegistries);
+    this.config.deserialize(compound.getCompound("config"));
   }
 
   @Override
@@ -249,6 +276,7 @@ public abstract class ExperienceHatchEntity extends ColorableMachineComponentEnt
     if (overlayTexture != null)
       compound.putString("overlayTexture", overlayTexture.toString());
     compound.put("inventory", this.capabilityInventory.writeNBT(pRegistries));
+    compound.put("config", this.config.serialize());
   }
 
   @Override
@@ -258,12 +286,20 @@ public abstract class ExperienceHatchEntity extends ColorableMachineComponentEnt
 
   @Override
   public ModelData getModelData() {
-    ModelData.Builder builder = getModelDataBuilder("all");
-    builder.with(HatchBakedModel.BASE_TEXTURE, baseTexture)
-        .with(HatchBakedModel.BASE_TEXTURE_NAME, "bg_all");
-    builder.with(HatchBakedModel.OVERLAY_TEXTURE, overlayTexture)
-        .with(HatchBakedModel.OVERLAY_TEXTURE_NAME, "ov_all");
-    return builder.build();
+    return getModelDataBuilder("all").build();
+  }
+
+  @Override
+  public HatchTextureData getTextureData(String mode) {
+    return MachineComponentEntity.super.getTextureData(mode).derive(
+        "bg_all",
+        baseTexture,
+        defaultBaseTexture,
+        "ov_all",
+        overlayTexture,
+        defaultOverlayTexture,
+        false
+    );
   }
 
   @Override
@@ -332,5 +368,24 @@ public abstract class ExperienceHatchEntity extends ColorableMachineComponentEnt
       }).get();
       default -> null;
     };
+  }
+
+  @Override
+  public void getStuffToSync(Consumer<ISyncable<?, ?>> container) {
+    container.accept(IOSideConfigSyncable.create(this::getConfig, this.config::set));
+  }
+
+  protected void attemptXPTransfer(IExperienceHandler from, IExperienceHandler to, long maxTransfer) {
+    for (int i = 0; i < from.getTanks(); i++) {
+      if (!from.canExtract(i)) continue;
+      long extracted = from.extractExperience(i, maxTransfer, true);
+      if (extracted <= 0) continue;
+      for (int j = 0; j < to.getTanks(); j++) {
+        if (!to.canReceive(i)) continue;
+        long inserted = to.receiveExperience(j, extracted, false);
+        if (inserted < 1) continue;
+        from.extractExperience(i, inserted, false);
+      }
+    }
   }
 }

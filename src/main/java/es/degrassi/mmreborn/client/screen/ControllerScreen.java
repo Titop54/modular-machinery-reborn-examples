@@ -2,13 +2,17 @@ package es.degrassi.mmreborn.client.screen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import es.degrassi.mmreborn.ModularMachineryReborn;
+import es.degrassi.mmreborn.api.client.machine.TooltipUse;
 import es.degrassi.mmreborn.client.container.ControllerContainer;
 import es.degrassi.mmreborn.client.screen.popup.BasePopupScreen;
+import es.degrassi.mmreborn.client.screen.widget.tabs.ControllerExtraTooltipsTabWidget;
 import es.degrassi.mmreborn.client.screen.widget.tabs.CoreTabWidget;
 import es.degrassi.mmreborn.client.screen.widget.tabs.ShowRecipesTabWidget;
 import es.degrassi.mmreborn.client.screen.widget.tabs.StructureBreakWidget;
 import es.degrassi.mmreborn.client.screen.widget.tabs.StructurePlacerWidget;
 import es.degrassi.mmreborn.client.screen.widget.tabs.TabGroupWidget;
+import es.degrassi.mmreborn.client.screen.widget.tabs.TopTabGroupWidget;
+import es.degrassi.mmreborn.client.screen.widget.tabs.TopTabWidget;
 import es.degrassi.mmreborn.common.machine.DynamicMachine;
 import es.degrassi.mmreborn.common.util.Mods;
 import es.degrassi.mmreborn.common.util.TextureSizeHelper;
@@ -26,18 +30,17 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Optional;
 
 @Getter
 public class ControllerScreen extends BasePopupScreen<ControllerContainer> {
-  public static final ResourceLocation TAB = ModularMachineryReborn.rl("textures/gui/widget/base_tab.png");
   protected static final ResourceLocation BASE_SLOT = ModularMachineryReborn.rl("textures/gui/base_slot.png");
   protected static final ResourceLocation BASE_SLOT_HOVERED = ModularMachineryReborn.rl("textures/gui/base_slot_hovered.png");
   private static final int screenWidth = 158;
 
-  private TabGroupWidget tabs;
+  private TopTabGroupWidget tabs;
 
   public ControllerScreen(ControllerContainer pMenu, Inventory pPlayerInventory, Component pTitle) {
     super(pMenu, pPlayerInventory, pTitle, TextureSizeHelper.getWidth(getTexture()), TextureSizeHelper.getHeight(getTexture()));
@@ -58,7 +61,7 @@ public class ControllerScreen extends BasePopupScreen<ControllerContainer> {
   }
 
   private void createWidgets() {
-    tabs = addRenderableWidget(new TabGroupWidget(x, y - TextureSizeHelper.getHeight(TAB)));
+    tabs = addRenderableWidget(TabGroupWidget.createTop(x, y - TextureSizeHelper.getHeight(TopTabWidget.TAB)));
     tabs.addTab(new StructurePlacerWidget(
             this,
             getMenu().getId(),
@@ -72,6 +75,12 @@ public class ControllerScreen extends BasePopupScreen<ControllerContainer> {
             )
         )
         .addTab(new CoreTabWidget(this));
+    Optional.ofNullable(ModularMachineryReborn.MACHINE_EXTRA_TOOLTIPS.get(getMenu().getId()))
+        .map(enumTooltips -> Optional.ofNullable(enumTooltips.get(TooltipUse.GUI)).orElse(List.of()))
+        .ifPresent(tooltips -> {
+          if (tooltips.isEmpty()) return;
+          tabs.addTab(new ControllerExtraTooltipsTabWidget(getMenu().getId()));
+        });
     if (Mods.isJEIorEMILoaded())
       tabs.addTab(new ShowRecipesTabWidget(/*ModularMachineryReborn.rl("textures/gui/tabs/recipes.png")*/ null, getMenu().getEntity().getFoundMachine()));
     tabs.setInitialFocus(getMenu().getEntity().getLastFocus());
@@ -184,6 +193,20 @@ public class ControllerScreen extends BasePopupScreen<ControllerContainer> {
       return;
     }
 
+    MutableComponent errorInfos = getMenu().getEntity().getErrorInfo().isEmpty() ? Component.empty() : Component.translatable("gui.controller.error.info");
+    List<FormattedCharSequence> o = font.split(
+        errorInfos.append(getMenu().getEntity().getErrorInfo().get()),
+        Mth.floor(screenWidth * (1 / scale))
+    );
+
+    if (!getMenu().getEntity().getErrorInfo().isEmpty()) {
+      for (FormattedCharSequence draw : o) {
+        offsetY += 7;
+        guiGraphics.drawString(font, draw, offsetX, offsetY, 0xFFFFFF);
+        offsetY += 7;
+      }
+    }
+
     // render the current status
     MutableComponent status = Component.translatable("gui.controller.status");
     List<FormattedCharSequence> out = font.split(status.append(getMenu().getEntity().getCraftingStatus().getUnlocMessage()), Mth.floor(screenWidth * (1 / scale)));
@@ -205,7 +228,7 @@ public class ControllerScreen extends BasePopupScreen<ControllerContainer> {
     guiGraphics.pose().popPose();
   }
 
-  protected void renderLabels(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
+  protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
     // Do not render the default texts
   }
 

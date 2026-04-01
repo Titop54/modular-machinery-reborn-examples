@@ -5,27 +5,39 @@ import es.degrassi.mmreborn.common.block.BlockBiomeReader;
 import es.degrassi.mmreborn.common.block.BlockCasing;
 import es.degrassi.mmreborn.common.block.BlockCasing.CasingType;
 import es.degrassi.mmreborn.common.block.BlockChunkloader;
+import es.degrassi.mmreborn.common.block.BlockCommandExecutioner;
 import es.degrassi.mmreborn.common.block.BlockController;
 import es.degrassi.mmreborn.common.block.BlockDimensionDetector;
 import es.degrassi.mmreborn.common.block.BlockDurabilityHatch;
+import es.degrassi.mmreborn.common.block.BlockEffectDispenser;
 import es.degrassi.mmreborn.common.block.BlockEnergyHatch;
 import es.degrassi.mmreborn.common.block.BlockEnergyInputHatch;
 import es.degrassi.mmreborn.common.block.BlockEnergyOutputHatch;
+import es.degrassi.mmreborn.common.block.BlockEntityDetector;
+import es.degrassi.mmreborn.common.block.BlockEntityKiller;
+import es.degrassi.mmreborn.common.block.BlockEntitySpawner;
 import es.degrassi.mmreborn.common.block.BlockExperienceHatch;
 import es.degrassi.mmreborn.common.block.BlockExperienceInputHatch;
 import es.degrassi.mmreborn.common.block.BlockExperienceOutputHatch;
 import es.degrassi.mmreborn.common.block.BlockFluidHatch;
 import es.degrassi.mmreborn.common.block.BlockFluidInputHatch;
 import es.degrassi.mmreborn.common.block.BlockFluidOutputHatch;
+import es.degrassi.mmreborn.common.block.BlockFuelTank;
+import es.degrassi.mmreborn.common.block.BlockEntityHealer;
 import es.degrassi.mmreborn.common.block.BlockHeightMeter;
+import es.degrassi.mmreborn.common.block.BlockEntityDamager;
 import es.degrassi.mmreborn.common.block.BlockInputBus;
 import es.degrassi.mmreborn.common.block.BlockOutputBus;
+import es.degrassi.mmreborn.common.block.BlockRedstonePort;
+import es.degrassi.mmreborn.common.block.BlockStructureChecker;
 import es.degrassi.mmreborn.common.block.BlockTimeCounter;
 import es.degrassi.mmreborn.common.block.BlockWeatherSensor;
 import es.degrassi.mmreborn.common.block.ParallelHatchBlock;
+import es.degrassi.mmreborn.common.block.prop.EffectDispenserSize;
 import es.degrassi.mmreborn.common.block.prop.EnergyHatchSize;
 import es.degrassi.mmreborn.common.block.prop.ExperienceHatchSize;
 import es.degrassi.mmreborn.common.block.prop.FluidHatchSize;
+import es.degrassi.mmreborn.common.block.prop.FuelTankSize;
 import es.degrassi.mmreborn.common.block.prop.ItemBusSize;
 import es.degrassi.mmreborn.common.block.prop.ItemDurabilityHatchSize;
 import es.degrassi.mmreborn.common.block.prop.ParallelHatchSize;
@@ -33,18 +45,32 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
+import java.util.Locale;
+
 import static es.degrassi.mmreborn.ModularMachineryReborn.rootLC;
 
 public class BlockRegistration {
   private BlockRegistration() {}
   public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(ModularMachineryReborn.MODID);
 
-  public static final DeferredBlock<BlockCasing> CASING_PLAIN = BLOCKS.register(rootLC("casing_" + CasingType.PLAIN.getSerializedName()), BlockCasing::new);
-  public static final DeferredBlock<BlockCasing> CASING_VENT = BLOCKS.register(rootLC("casing_" + CasingType.VENT.getSerializedName()), BlockCasing::new);
-  public static final DeferredBlock<BlockCasing> CASING_FIREBOX = BLOCKS.register(rootLC("casing_" + CasingType.FIREBOX.getSerializedName()), BlockCasing::new);
-  public static final DeferredBlock<BlockCasing> CASING_GEARBOX = BLOCKS.register(rootLC("casing_" + CasingType.GEARBOX.getSerializedName()), BlockCasing::new);
-  public static final DeferredBlock<BlockCasing> CASING_REINFORCED = BLOCKS.register(rootLC("casing_" + CasingType.REINFORCED.getSerializedName()), BlockCasing::new);
-  public static final DeferredBlock<BlockCasing> CASING_CIRCUITRY = BLOCKS.register(rootLC("casing_" + CasingType.CIRCUITRY.getSerializedName()), BlockCasing::new);
+  public static final DeferredBlock<BlockCasing> CASING_PLAIN =
+      BLOCKS.register(rootLC("casing_" + CasingType.PLAIN.getSerializedName()),
+          () -> new BlockCasing(CasingType.PLAIN));
+  public static final DeferredBlock<BlockCasing> CASING_VENT =
+      BLOCKS.register(rootLC("casing_" + CasingType.VENT.getSerializedName()),
+          () -> new BlockCasing(CasingType.VENT));
+  public static final DeferredBlock<BlockCasing> CASING_FIREBOX =
+      BLOCKS.register(rootLC("casing_" + CasingType.FIREBOX.getSerializedName()),
+          () -> new BlockCasing(CasingType.FIREBOX));
+  public static final DeferredBlock<BlockCasing> CASING_GEARBOX =
+      BLOCKS.register(rootLC("casing_" + CasingType.GEARBOX.getSerializedName()),
+        () -> new BlockCasing(CasingType.GEARBOX));
+  public static final DeferredBlock<BlockCasing> CASING_REINFORCED =
+      BLOCKS.register(rootLC("casing_" + CasingType.REINFORCED.getSerializedName()),
+          () -> new BlockCasing(CasingType.REINFORCED));
+  public static final DeferredBlock<BlockCasing> CASING_CIRCUITRY =
+      BLOCKS.register(rootLC("casing_" + CasingType.CIRCUITRY.getSerializedName()),
+          () -> new BlockCasing(CasingType.CIRCUITRY));
 
   public static final DeferredBlock<BlockController> CONTROLLER = BLOCKS.register(rootLC("controller"), BlockController::new);
 
@@ -211,6 +237,63 @@ public class BlockRegistration {
   public static final DeferredBlock<ParallelHatchBlock> PARALLEL_HATCH_MAX =
       BLOCKS.register(rootLC("parallel_hatch_" + ParallelHatchSize.MAX.getSerializedName()),
       () -> new ParallelHatchBlock(ParallelHatchSize.MAX));
+
+  public static final DeferredBlock<BlockFuelTank> FUEL_TANK_TINY =
+      BLOCKS.register(rootLC("fuel_tank_" + FuelTankSize.TINY.getSerializedName()),
+      () -> new BlockFuelTank(FuelTankSize.TINY));
+  public static final DeferredBlock<BlockFuelTank> FUEL_TANK_SMALL =
+      BLOCKS.register(rootLC("fuel_tank_" + FuelTankSize.SMALL.getSerializedName()),
+      () -> new BlockFuelTank(FuelTankSize.SMALL));
+  public static final DeferredBlock<BlockFuelTank> FUEL_TANK_NORMAL =
+      BLOCKS.register(rootLC("fuel_tank_" + FuelTankSize.NORMAL.getSerializedName()),
+      () -> new BlockFuelTank(FuelTankSize.NORMAL));
+  public static final DeferredBlock<BlockFuelTank> FUEL_TANK_REINFORCED =
+      BLOCKS.register(rootLC("fuel_tank_" + FuelTankSize.REINFORCED.getSerializedName()),
+      () -> new BlockFuelTank(FuelTankSize.REINFORCED));
+  public static final DeferredBlock<BlockFuelTank> FUEL_TANK_BIG =
+      BLOCKS.register(rootLC("fuel_tank_" + FuelTankSize.BIG.getSerializedName()),
+      () -> new BlockFuelTank(FuelTankSize.BIG));
+  public static final DeferredBlock<BlockFuelTank> FUEL_TANK_HUGE =
+      BLOCKS.register(rootLC("fuel_tank_" + FuelTankSize.HUGE.getSerializedName()),
+      () -> new BlockFuelTank(FuelTankSize.HUGE));
+
+  public static final DeferredBlock<BlockEffectDispenser> EFFECT_DISPENSER_SMALL =
+      BLOCKS.register(rootLC("effect_dispenser_" + EffectDispenserSize.SMALL.getSerializedName()),
+      () -> new BlockEffectDispenser(EffectDispenserSize.SMALL));
+  public static final DeferredBlock<BlockEffectDispenser> EFFECT_DISPENSER_MEDIUM =
+      BLOCKS.register(rootLC("effect_dispenser_" + EffectDispenserSize.MEDIUM.getSerializedName()),
+          () -> new BlockEffectDispenser(EffectDispenserSize.MEDIUM));
+  public static final DeferredBlock<BlockEffectDispenser> EFFECT_DISPENSER_BIG =
+      BLOCKS.register(rootLC("effect_dispenser_" + EffectDispenserSize.BIG.getSerializedName()),
+          () -> new BlockEffectDispenser(EffectDispenserSize.BIG));
+
+  public static final DeferredBlock<BlockEntityDetector> ENTITY_DETECTOR =
+      BLOCKS.register(rootLC("entity_detector"),
+      BlockEntityDetector::new);
+  public static final DeferredBlock<BlockEntityDamager> ENTITY_DAMAGER =
+      BLOCKS.register(rootLC("entity_damager"),
+      BlockEntityDamager::new);
+  public static final DeferredBlock<BlockEntityHealer> ENTITY_HEALER =
+      BLOCKS.register(rootLC("entity_healer"),
+      BlockEntityHealer::new);
+  public static final DeferredBlock<BlockEntitySpawner> ENTITY_SPAWNER =
+      BLOCKS.register(rootLC("entity_spawner"),
+      BlockEntitySpawner::new);
+  public static final DeferredBlock<BlockEntityKiller> ENTITY_KILLER =
+      BLOCKS.register(rootLC("entity_killer"),
+      BlockEntityKiller::new);
+
+  public static final DeferredBlock<BlockStructureChecker> STRUCTURE_CHECKER =
+      BLOCKS.register(rootLC("structure_checker"),
+      BlockStructureChecker::new);
+
+  public static final DeferredBlock<BlockRedstonePort> REDSTONE_PORT =
+      BLOCKS.register(rootLC("REDSTONE_PORT".toLowerCase(Locale.ENGLISH)),
+      BlockRedstonePort::new);
+
+  public static final DeferredBlock<BlockCommandExecutioner> COMMAND_EXECUTIONER =
+      BLOCKS.register(rootLC("command_executioner"),
+      BlockCommandExecutioner::new);
 
   public static void register(final IEventBus bus) {
     BLOCKS.register(bus);

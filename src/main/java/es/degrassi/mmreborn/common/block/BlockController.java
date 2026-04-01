@@ -2,6 +2,7 @@ package es.degrassi.mmreborn.common.block;
 
 import es.degrassi.mmreborn.ModularMachineryReborn;
 import es.degrassi.mmreborn.client.container.ControllerContainer;
+import es.degrassi.mmreborn.client.integration.athena.model.controller.ControllerBakedModel;
 import es.degrassi.mmreborn.common.entity.MachineControllerEntity;
 import es.degrassi.mmreborn.common.item.ControllerItem;
 import es.degrassi.mmreborn.common.item.ItemBlueprint;
@@ -62,30 +63,35 @@ public class BlockController extends BlockMachineComponent implements BlockTickE
     builder.add(BlockStateProperties.HORIZONTAL_FACING);
   }
 
-  @Nullable
   @Override
   public BlockState getStateForPlacement(BlockPlaceContext context) {
-    return defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, context.getHorizontalDirection().getOpposite());
+    return super.getStateForPlacement(context)
+        .setValue(BlockStateProperties.HORIZONTAL_FACING, context.getHorizontalDirection().getOpposite());
   }
 
   @Override
   protected void onPlace(BlockState pState, Level pLevel, BlockPos pPos, BlockState pOldState, boolean pMovedByPiston) {
     ResourceLocation id = ModularMachineryReborn.MACHINES_BLOCK.inverse().get(this);
     if (id != null && pLevel.getBlockEntity(pPos) instanceof MachineControllerEntity entity) {
-      entity.setId(id);
+      entity.setMachine(id);
+      if (entity.getModelData().get(ControllerBakedModel.DATA).hasCustomModel()) {
+        pLevel.setBlockAndUpdate(pPos, pState.setValue(BlockMachineComponent.CONNECT_TEXTURES, false));
+      }
       if (pLevel instanceof ServerLevel serverLevel)
         serverLevel.getServer().tell(new TickTask(1, () -> PacketDistributor.sendToPlayersTrackingChunk(serverLevel,
             new ChunkPos(pPos), new SMachineUpdatePacket(id, pPos))));
     }
+    super.onPlace(pState, pLevel, pPos, pOldState, pMovedByPiston);
   }
 
   //When placed by an entity
   @Override
   public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+    super.setPlacedBy(level, pos, state, placer, stack);
     ControllerItem.getMachine(stack).ifPresent(machine -> {
       BlockEntity tile = level.getBlockEntity(pos);
       if (tile instanceof MachineControllerEntity machineTile) {
-        machineTile.setId(machine.getRegistryName());
+        machineTile.setMachine(machine.getRegistryName());
         if (level instanceof ServerLevel serverLevel)
           level.getServer().tell(new TickTask(1, () -> PacketDistributor.sendToPlayersTrackingChunk(serverLevel, new ChunkPos(pos), new SMachineUpdatePacket(machine.getRegistryName(), pos))));
       }
@@ -132,7 +138,7 @@ public class BlockController extends BlockMachineComponent implements BlockTickE
 
   @Override
   public BlockState rotate(BlockState state, Rotation rotation) {
-    return state.setValue(BlockStateProperties.HORIZONTAL_FACING, rotation.rotate(state.getValue(BlockStateProperties.HORIZONTAL_FACING)));
+    return state.setValue(BlockStateProperties.HORIZONTAL_FACING, rotation.rotate(getFacing(state)));
   }
 
   @Override
@@ -142,7 +148,7 @@ public class BlockController extends BlockMachineComponent implements BlockTickE
       if (player instanceof ServerPlayer serverPlayer) {
         if (player.getItemInHand(hand).getItem() instanceof ItemBlueprint) {
           DynamicMachine machine = controller.getFoundMachine();
-          PacketDistributor.sendToPlayersTrackingChunk(serverPlayer.serverLevel(), new ChunkPos(pos), new SAddControllerRenderer(pos));
+          PacketDistributor.sendToPlayersTrackingChunk(serverPlayer.serverLevel(), new ChunkPos(pos), new SAddControllerRenderer(machine.getRegistryName(), pos));
           return ItemInteractionResult.SUCCESS;
         }
         ControllerContainer.open(serverPlayer, controller);
@@ -193,5 +199,9 @@ public class BlockController extends BlockMachineComponent implements BlockTickE
         .filter(blockEntity -> blockEntity instanceof MachineControllerEntity)
         .map(tile -> ((MachineControllerEntity) tile).getInteractionSound())
         .orElse(super.getSoundType(state));
+  }
+
+  public Direction getFacing(BlockState state) {
+    return state.getValue(BlockStateProperties.HORIZONTAL_FACING);
   }
 }

@@ -16,13 +16,13 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
 
 @ParametersAreNonnullByDefault
-public class StructureBreakWidget extends TabWidget {
+public class StructureBreakWidget extends TopTabWidget {
   private final ControllerScreen parentScreen;
 
   private final ResourceLocation machine;
   private final BlockPos controllerPos;
 
-  public final Component component = Component.translatable("modular_machinery_reborn.gui.structure_break_button");
+  public final Component component = Component.translatable("modular_machinery_reborn.gui.structure_breaker_button");
 
   public StructureBreakWidget(ControllerScreen parentScreen, ResourceLocation machine, BlockPos controllerPos) {
     super(0, 0, new ItemOrIconButton(5, 5, Items.DIAMOND_PICKAXE, button -> {}));

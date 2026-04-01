@@ -22,7 +22,7 @@ public class FunctionComponent extends MachineComponent<Void> implements Control
   }
 
   @Override
-  public ComponentType getComponentType() {
+  public ComponentType<Void> getComponentType() {
     return ComponentRegistration.COMPONENT_FUNCTION.get();
   }
 
@@ -32,8 +32,13 @@ public class FunctionComponent extends MachineComponent<Void> implements Control
   }
 
   @Override
+  public <C extends MachineComponent<Void>> boolean canMerge(C c) {
+    return false;
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
-  public <C extends MachineComponent<?>> C merge(C c) {
+  public <C extends MachineComponent<Void>> C merge(C c) {
     return (C) this;
   }
 

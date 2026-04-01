@@ -4,6 +4,7 @@ import es.degrassi.mmreborn.ModularMachineryReborn;
 import java.util.concurrent.CompletableFuture;
 
 import es.degrassi.mmreborn.common.registration.BlockRegistration;
+import es.degrassi.mmreborn.common.registration.ItemRegistration;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.PackOutput;
 import net.minecraft.data.tags.ItemTagsProvider;
@@ -19,6 +20,10 @@ public class MMRItemTagProvider extends ItemTagsProvider {
 
   @Override
   public void addTags(HolderLookup.@NotNull Provider provider) {
+    tag(MMRTags.Items.WRENCH)
+        .add(
+            ItemRegistration.WRENCH.asItem()
+        );
     tag(MMRTags.Items.ENERGY_INPUT)
         .add(
             BlockRegistration.ENERGY_INPUT_HATCH_TINY.get().asItem(),
@@ -121,6 +126,16 @@ public class MMRItemTagProvider extends ItemTagsProvider {
             BlockRegistration.ITEM_DURABILITY_HATCH_BIG.get().asItem()
         );
 
+    tag(MMRTags.Items.FUEL_TANK)
+        .add(
+            BlockRegistration.FUEL_TANK_TINY.get().asItem(),
+            BlockRegistration.FUEL_TANK_SMALL.get().asItem(),
+            BlockRegistration.FUEL_TANK_NORMAL.get().asItem(),
+            BlockRegistration.FUEL_TANK_REINFORCED.get().asItem(),
+            BlockRegistration.FUEL_TANK_BIG.get().asItem(),
+            BlockRegistration.FUEL_TANK_HUGE.get().asItem()
+        );
+
     tag(MMRTags.Items.ITEM)
         .addTag(MMRTags.Items.INPUT_BUS)
         .addTag(MMRTags.Items.OUTPUT_BUS);
@@ -146,6 +161,22 @@ public class MMRItemTagProvider extends ItemTagsProvider {
             BlockRegistration.PARALLEL_HATCH_MAX.get().asItem()
         );
 
+    tag(MMRTags.Items.EFFECT_DISPENSER)
+        .add(
+            BlockRegistration.EFFECT_DISPENSER_SMALL.get().asItem(),
+            BlockRegistration.EFFECT_DISPENSER_MEDIUM.get().asItem(),
+            BlockRegistration.EFFECT_DISPENSER_BIG.get().asItem()
+        );
+
+    tag(MMRTags.Items.ENTITY)
+        .add(
+            BlockRegistration.ENTITY_DETECTOR.get().asItem(),
+            BlockRegistration.ENTITY_SPAWNER.get().asItem(),
+            BlockRegistration.ENTITY_KILLER.get().asItem(),
+            BlockRegistration.ENTITY_DAMAGER.get().asItem(),
+            BlockRegistration.ENTITY_HEALER.get().asItem()
+        );
+
     tag(MMRTags.Items.CASINGS)
         .add(
             BlockRegistration.CASING_PLAIN.get().asItem(),
@@ -156,19 +187,30 @@ public class MMRItemTagProvider extends ItemTagsProvider {
             BlockRegistration.CASING_CIRCUITRY.get().asItem()
         );
 
-    tag(MMRTags.Items.ALL_CASINGS)
-        .addTag(MMRTags.Items.CASINGS)
+    tag(MMRTags.Items.HATCHES)
         .addTag(MMRTags.Items.ENERGY)
         .addTag(MMRTags.Items.ITEM)
         .addTag(MMRTags.Items.FLUID)
         .addTag(MMRTags.Items.EXPERIENCE)
         .addTag(MMRTags.Items.PARALLEL)
         .addTag(MMRTags.Items.DURABILITY)
-        .add(BlockRegistration.BIOME_READER.get().asItem())
-        .add(BlockRegistration.DIMENSIONAL_DETECTOR.get().asItem())
-        .add(BlockRegistration.WEATHER_SENSOR.get().asItem())
-        .add(BlockRegistration.TIME_COUNTER.get().asItem())
-        .add(BlockRegistration.CHUNKLOADER.get().asItem())
-        .add(BlockRegistration.HEIGHT_METER.get().asItem());
+        .addTag(MMRTags.Items.FUEL_TANK)
+        .addTag(MMRTags.Items.EFFECT_DISPENSER)
+        .addTag(MMRTags.Items.ENTITY)
+        .add(
+            BlockRegistration.BIOME_READER.get().asItem(),
+            BlockRegistration.DIMENSIONAL_DETECTOR.get().asItem(),
+            BlockRegistration.WEATHER_SENSOR.get().asItem(),
+            BlockRegistration.TIME_COUNTER.get().asItem(),
+            BlockRegistration.CHUNKLOADER.get().asItem(),
+            BlockRegistration.HEIGHT_METER.get().asItem(),
+            BlockRegistration.STRUCTURE_CHECKER.get().asItem(),
+            BlockRegistration.REDSTONE_PORT.get().asItem(),
+            BlockRegistration.COMMAND_EXECUTIONER.get().asItem()
+        );
+
+    tag(MMRTags.Items.ALL_CASINGS)
+        .addTag(MMRTags.Items.CASINGS)
+        .addTag(MMRTags.Items.HATCHES);
   }
 }

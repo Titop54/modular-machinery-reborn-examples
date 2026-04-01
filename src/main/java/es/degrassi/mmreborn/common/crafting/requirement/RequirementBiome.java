@@ -5,8 +5,10 @@ import com.google.gson.JsonObject;
 import es.degrassi.mmreborn.api.codec.DefaultCodecs;
 import es.degrassi.mmreborn.api.codec.NamedCodec;
 import es.degrassi.mmreborn.api.crafting.ICraftingContext;
+import es.degrassi.mmreborn.api.crafting.requirement.IDisplayInfo;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirement;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirementList;
+import es.degrassi.mmreborn.api.crafting.requirement.RecipeRequirement;
 import es.degrassi.mmreborn.common.crafting.ComponentType;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.component.BiomeComponent;
@@ -17,33 +19,34 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.biome.Biome;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public class RequirementBiome implements IRequirement<BiomeComponent> {
+public class RequirementBiome implements IRequirement<BiomeComponent, List<ResourceLocation>> {
   public static final NamedCodec<RequirementBiome> CODEC = NamedCodec.record(instance -> instance.group(
       DefaultCodecs.RESOURCE_LOCATION.listOf().fieldOf("filter").forGetter(RequirementBiome::filter),
-      NamedCodec.BOOL.optionalFieldOf("blacklist", false).forGetter(RequirementBiome::blacklist),
-      PositionedRequirement.POSITION_CODEC.optionalFieldOf("position", new PositionedRequirement(0, 0)).forGetter(IRequirement::getPosition)
+      NamedCodec.BOOL.optionalFieldOf("blacklist", false).forGetter(RequirementBiome::blacklist)
   ).apply(instance, RequirementBiome::new), "Biome Requirement");
 
   @Getter
   private final IOType actionType;
   @Getter
-  private final RequirementType<RequirementBiome> requirementType;
-  @Getter
   private final PositionedRequirement position;
   private final List<ResourceLocation> filter;
   private final boolean blacklist;
 
-  public RequirementBiome(List<ResourceLocation> filter, boolean blacklist, PositionedRequirement position) {
+  public RequirementBiome(List<ResourceLocation> filter, boolean blacklist) {
     this.filter = filter;
     this.blacklist = blacklist;
-    this.position = position;
-    this.requirementType = RequirementTypeRegistration.BIOME.get();
+    this.position = new PositionedRequirement(0, 0);
     this.actionType = IOType.INPUT;
+  }
+
+  public RequirementType<RequirementBiome, BiomeComponent, List<ResourceLocation>> getType() {
+    return RequirementTypeRegistration.BIOME.get();
   }
 
   public List<ResourceLocation> filter() {
@@ -55,12 +58,7 @@ public class RequirementBiome implements IRequirement<BiomeComponent> {
   }
 
   @Override
-  public RequirementType<RequirementBiome> getType() {
-    return RequirementTypeRegistration.BIOME.get();
-  }
-
-  @Override
-  public ComponentType getComponentType() {
+  public ComponentType<List<ResourceLocation>> getComponentType() {
     return ComponentRegistration.COMPONENT_BIOME.get();
   }
 
@@ -98,5 +96,19 @@ public class RequirementBiome implements IRequirement<BiomeComponent> {
   @Override
   public boolean isComponentValid(BiomeComponent m, ICraftingContext context) {
     return getMode().equals(m.getIOType());
+  }
+
+  @Override
+  public void getDefaultDisplayInfo(IDisplayInfo info, RecipeRequirement<?, ?, ?> requirement) {
+    StringBuilder biomes = new StringBuilder();
+    filter.forEach(biome -> biomes.append(biome.toString()).append(","));
+    int index = biomes.lastIndexOf(",");
+    if (index >= biomes.length() - 1)
+      biomes.deleteCharAt(index);
+    info.addTooltip(Component.translatable(
+        "modular_machinery_reborn.jei.ingredient.biome." + blacklist(),
+        biomes.toString()
+    ));
+    info.setItemIcon(Items.MAP);
   }
 }

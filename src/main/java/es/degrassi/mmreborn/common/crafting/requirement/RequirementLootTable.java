@@ -10,6 +10,7 @@ import es.degrassi.mmreborn.api.crafting.requirement.IRequirementList;
 import es.degrassi.mmreborn.common.crafting.ComponentType;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.component.ItemComponent;
+import es.degrassi.mmreborn.common.manager.handler.ItemHandler;
 import es.degrassi.mmreborn.common.registration.ComponentRegistration;
 import es.degrassi.mmreborn.common.registration.Registration;
 import es.degrassi.mmreborn.common.registration.RequirementTypeRegistration;
@@ -31,7 +32,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-public class RequirementLootTable implements IRequirement<ItemComponent> {
+public class RequirementLootTable implements IRequirement<ItemComponent, ItemHandler> {
   public static final NamedCodec<RequirementLootTable> CODEC = NamedCodec.record(lootTableRequirementInstance ->
       lootTableRequirementInstance.group(
           DefaultCodecs.RESOURCE_LOCATION.fieldOf("table").forGetter(RequirementLootTable::getLootTable),
@@ -57,18 +58,22 @@ public class RequirementLootTable implements IRequirement<ItemComponent> {
   }
 
   @Override
-  public RequirementType<RequirementLootTable> getType() {
+  public RequirementType<RequirementLootTable, ItemComponent, ItemHandler> getType() {
     return RequirementTypeRegistration.LOOT_TABLE.get();
   }
 
   @Override
-  public ComponentType getComponentType() {
+  public ComponentType<ItemHandler> getComponentType() {
     return ComponentRegistration.COMPONENT_ITEM.get();
   }
 
   @Override
   public boolean test(ItemComponent component, ICraftingContext context) {
-    return context.getMachineTile().getComponentManager().getParallel().isEmpty();
+    if (context.getMachineTile().getComponentManager().getParallel().isPresent()) {
+      context.getMachineTile().addErrorInfo(Component.translatable("craftcheck.failure.parallel.loot_table"));
+      return false;
+    }
+    return true;
   }
 
   @Override
@@ -80,6 +85,7 @@ public class RequirementLootTable implements IRequirement<ItemComponent> {
     if (context.getMachineTile().getLevel() == null || context.getMachineTile().getLevel().getServer() == null)
       return CraftingResult.pass();
     if (context.getMachineTile().getComponentManager().getParallel().isPresent()) {
+      context.getMachineTile().setErrorMessage(Component.translatable("craftcheck.failure.parallel.loot_table"));
       return CraftingResult.error(Component.translatable("craftcheck.failure.parallel.loot_table"));
     }
     if (toOutput.isEmpty()) {

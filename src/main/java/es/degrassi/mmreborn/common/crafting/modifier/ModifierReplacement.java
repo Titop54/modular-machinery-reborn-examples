@@ -13,11 +13,13 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.state.pattern.BlockInWorld;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 
-public class ModifierReplacement {
+public class ModifierReplacement implements Predicate<BlockInWorld> {
   public static final NamedCodec<ModifierReplacement> CODEC = NamedCodec.record(instance -> instance.group(
       BlockIngredient.CODEC.fieldOf("replacement").forGetter(ModifierReplacement::getIngredient),
       RecipeModifier.CODEC.listOf().fieldOf("modifiers").forGetter(ModifierReplacement::getModifiers),
@@ -25,12 +27,12 @@ public class ModifierReplacement {
   ).apply(instance, ModifierReplacement::new), "Modifier Replacement");
 
   private final BlockIngredient info;
-  private final List<RecipeModifier> modifier;
+  private final List<RecipeModifier<?, ?, ?>> modifier;
   private final List<Component> description;
   @Getter
   private final BlockPos position;
 
-  public ModifierReplacement(BlockIngredient info, List<RecipeModifier> modifier, BlockPos pos) {
+  public ModifierReplacement(BlockIngredient info, List<RecipeModifier<?, ?, ?>> modifier, BlockPos pos) {
     this.info = info;
     this.modifier = modifier;
     this.position = pos;
@@ -43,12 +45,16 @@ public class ModifierReplacement {
     return info;
   }
 
-  public List<RecipeModifier> getModifiers() {
+  public List<RecipeModifier<?, ?, ?>> getModifiers() {
     return Collections.unmodifiableList(modifier);
   }
 
   public List<Component> getDescriptionLines() {
     return description;
+  }
+
+  public boolean test(BlockInWorld biw) {
+    return getIngredient().test(biw);
   }
 
   public List<String> getDescriptionLinesString() {

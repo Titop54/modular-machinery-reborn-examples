@@ -6,14 +6,15 @@ import es.degrassi.mmreborn.api.client.Icon;
 import es.degrassi.mmreborn.api.client.screen.TooltipRender;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.experimental.Accessors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ItemLike;
 import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -21,13 +22,14 @@ import java.util.List;
 
 @Getter
 @Setter
+@Accessors(chain = true)
 @ParametersAreNonnullByDefault
 public class ItemOrIconButton extends Button implements TooltipRender {
   private boolean halfSize = false;
   private boolean disableClickSound = false;
   private boolean disableBackground = false;
   @Nullable
-  private final Item item;
+  private final ItemLike item;
   @Nullable
   private final Icon icon;
 
@@ -40,7 +42,7 @@ public class ItemOrIconButton extends Button implements TooltipRender {
     this.icon = null;
   }
 
-  public ItemOrIconButton(int x, int y, Item item, OnPress onPress) {
+  public ItemOrIconButton(int x, int y, ItemLike item, OnPress onPress) {
     super(x, y, 16, 16, Component.empty(), onPress, Button.DEFAULT_NARRATION);
     this.item = item;
     this.icon = null;
@@ -68,9 +70,10 @@ public class ItemOrIconButton extends Button implements TooltipRender {
     return this;
   }
 
-  public void setVisibility(boolean vis) {
+  public ItemOrIconButton setVisibility(boolean vis) {
     this.visible = vis;
     this.active = vis;
+    return this;
   }
 
   public void playDownSound(SoundManager soundHandler) {
@@ -82,10 +85,10 @@ public class ItemOrIconButton extends Button implements TooltipRender {
   public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partial) {
     if (this.visible) {
       Icon icon = this.getIcon();
-      Item item = this.getItem();
+      ItemLike item = this.getItem();
       if (this.halfSize) {
-        this.width = 8;
-        this.height = 8;
+        this.width = getWidth() / 2;
+        this.height = getHeight() / 2;
       }
 
       int yOffset = this.isHovered() ? 1 : 0;
@@ -95,7 +98,11 @@ public class ItemOrIconButton extends Button implements TooltipRender {
         }
 
         if (item != null) {
-          guiGraphics.renderItem(new ItemStack(item), this.getX(), this.getY(), 0, 20);
+          guiGraphics.pose().pushPose();
+          guiGraphics.pose().translate(getX(), getY(), 0);
+          guiGraphics.pose().scale(0.75f, 0.75f, 0.75f);
+          guiGraphics.renderItem(new ItemStack(item), (int) (getWidth() * 0.45), (int) (getHeight() * 0.65), 0, 20);
+          guiGraphics.pose().popPose();
         } else if (icon != null) {
           Blitter blitter = icon.getBlitter();
           if (!this.active) {
@@ -117,7 +124,6 @@ public class ItemOrIconButton extends Button implements TooltipRender {
         }
       }
     }
-
   }
 
   @Override
@@ -126,11 +132,11 @@ public class ItemOrIconButton extends Button implements TooltipRender {
   }
 
   public List<Component> getTooltipMessage() {
-    return tooltips;
+    return getTooltips();
   }
 
   public Rect2i getTooltipArea() {
-    return new Rect2i(this.getX(), this.getY(), this.halfSize ? 8 : 16, this.halfSize ? 8 : 16);
+    return new Rect2i(this.getX(), this.getY(), this.halfSize ? getWidth() / 2 : getWidth(), this.halfSize ? getHeight() / 2 : getHeight());
   }
 
   public boolean isTooltipAreaVisible() {
@@ -150,8 +156,8 @@ public class ItemOrIconButton extends Button implements TooltipRender {
         "halfSize=" + halfSize +
         ", disableClickSound=" + disableClickSound +
         ", disableBackground=" + disableBackground +
-        ", item=" + (item == null ? "null" : item) +
-        ", icon=" + (icon == null ? "null" : icon) +
+        ", item=" + (getItem() == null ? "null" : getItem()) +
+        ", icon=" + (getIcon() == null ? "null" : getIcon()) +
         ", renderTooltip=" + renderTooltip +
         ", x=" + getX() +
         ", y=" + getY() +

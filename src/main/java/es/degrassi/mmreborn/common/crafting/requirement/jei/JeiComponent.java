@@ -18,7 +18,7 @@ import java.util.List;
 
 @Getter
 @Setter
-public abstract class JeiComponent<X, R extends RecipeRequirement<?, ?>> implements IIngredientRenderer<X>,
+public abstract class JeiComponent<X, R extends RecipeRequirement<?, ?, ?>> implements IIngredientRenderer<X>,
     IJeiRequirement<R> {
   protected static final ResourceLocation LOCATION_JEI_ICONS = ResourceLocation.fromNamespaceAndPath(ModularMachineryReborn.MODID, "textures/gui/jeirecipeicons.png");
 
@@ -45,7 +45,6 @@ public abstract class JeiComponent<X, R extends RecipeRequirement<?, ?>> impleme
   }
 
   @Override
-  @SuppressWarnings("removal")
   public @NotNull List<Component> getTooltip(@NotNull X ingredient, @NotNull TooltipFlag tooltipFlag) {
     return new LinkedList<>();
   }

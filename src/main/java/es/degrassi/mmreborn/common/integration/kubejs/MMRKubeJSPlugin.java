@@ -1,26 +1,41 @@
 package es.degrassi.mmreborn.common.integration.kubejs;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.latvian.mods.kubejs.event.EventGroup;
 import dev.latvian.mods.kubejs.event.EventGroupRegistry;
 import dev.latvian.mods.kubejs.event.EventHandler;
 import dev.latvian.mods.kubejs.event.EventTargetType;
 import dev.latvian.mods.kubejs.event.TargetedEventHandler;
+import dev.latvian.mods.kubejs.generator.KubeDataGenerator;
 import dev.latvian.mods.kubejs.plugin.KubeJSPlugin;
-import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
+import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
+import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
+import dev.latvian.mods.kubejs.recipe.schema.postprocessing.RecipePostProcessorTypeRegistry;
 import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.TypeWrapperRegistry;
 import dev.latvian.mods.rhino.type.TypeInfo;
-import es.degrassi.mmreborn.common.integration.kubejs.builder.MachineBuilderJS.MachineKubeEvent;
+import es.degrassi.mmreborn.ModularMachineryReborn;
+import es.degrassi.mmreborn.api.BlockIngredient;
+import es.degrassi.mmreborn.api.PartialBlockState;
+import es.degrassi.mmreborn.api.client.machine.TooltipUse;
+import es.degrassi.mmreborn.common.integration.kubejs.builder.FuelDataJS;
 import es.degrassi.mmreborn.common.integration.kubejs.builder.ModifierBuilderJS;
+import es.degrassi.mmreborn.common.integration.kubejs.builder.ProgressDataJS;
 import es.degrassi.mmreborn.common.integration.kubejs.builder.StructureBuilderJS;
+import es.degrassi.mmreborn.common.integration.kubejs.events.ExtraTooltipsKubeEvent;
+import es.degrassi.mmreborn.common.integration.kubejs.events.MachineKubeEvent;
 import es.degrassi.mmreborn.common.integration.kubejs.function.FunctionKubeEvent;
 import es.degrassi.mmreborn.common.integration.kubejs.function.MachineControllerJS;
-import es.degrassi.mmreborn.common.machine.Sounds;
-import es.degrassi.mmreborn.common.registration.RecipeRegistration;
+import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.util.IntRange;
 import es.degrassi.mmreborn.common.util.MachineModelLocation;
+import es.degrassi.mmreborn.common.util.sound.AmbientSound;
+import es.degrassi.mmreborn.common.util.sound.MMRSoundType;
+import es.degrassi.mmreborn.common.util.sound.Sounds;
 import net.minecraft.network.chat.Component;
+
+import java.util.EnumMap;
 
 public class MMRKubeJSPlugin implements KubeJSPlugin {
   public static final EventGroup MMR_EVENTS = EventGroup.of("MMREvents");
@@ -29,10 +44,33 @@ public class MMRKubeJSPlugin implements KubeJSPlugin {
       .server("recipeFunction", () -> FunctionKubeEvent.class)
       .hasResult(TypeInfo.of(Component.class))
       .requiredTarget(EventTargetType.STRING);
+  public static final EventHandler TOOLTIPS = MMR_EVENTS.server("extraTooltips", () -> ExtraTooltipsKubeEvent.class);
 
   @Override
-  public void registerRecipeSchemas(RecipeSchemaRegistry event) {
-    event.register(RecipeRegistration.RECIPE_TYPE.getId(), ModularMachineryRebornRecipeSchemas.CUSTOM_MACHINE);
+  public void registerEvents(EventGroupRegistry registry) {
+    registry.register(MMR_EVENTS);
+  }
+
+  @Override
+  public void registerRecipeComponents(RecipeComponentTypeRegistry registry) {
+    registry.register(ModularMachineryRebornRecipeComponents.RESOURCE_LOCATION);
+    registry.register(ModularMachineryRebornRecipeComponents.REQUIREMENT_COMPONENT);
+    registry.register(ModularMachineryRebornRecipeComponents.PROGRESS_DATA);
+  }
+
+  @Override
+  public void registerRecipeFactories(RecipeFactoryRegistry registry) {
+    registry.register(ModularMachineryReborn.rl("machine_recipe"), MachineRecipeBuilderJS.class, MachineRecipeBuilderJS::new);
+  }
+
+  @Override
+  public void registerRecipePostProcessors(RecipePostProcessorTypeRegistry registry) {
+    registry.register(RecipeIdPostProcessor.TYPE);
+  }
+
+  @Override
+  public void beforeScriptsLoaded(ScriptManager manager) {
+    RecipeIdPostProcessor.IDS.clear();
   }
 
   @Override
@@ -42,21 +80,56 @@ public class MMRKubeJSPlugin implements KubeJSPlugin {
     registry.add("MMRRecipeModifier", ModifierBuilderJS.RecipeModifierBuilderJS.class);
     registry.add("ControllerModel", MachineModelLocation.class);
     registry.add("MachineController", MachineControllerJS.class);
-  }
-
-  @Override
-  public void beforeScriptsLoaded(ScriptManager manager) {
-    MachineRecipeBuilderJS.IDS.clear();
-  }
-
-  @Override
-  public void registerEvents(EventGroupRegistry registry) {
-    registry.register(MMR_EVENTS);
+    registry.add("ProgressData", ProgressDataJS.class);
+    registry.add("FuelData", FuelDataJS.class);
+    registry.add("IOType", IOType.class);
+    registry.add("TooltipUse", TooltipUse.class);
   }
 
   @Override
   public void registerTypeWrappers(TypeWrapperRegistry registry) {
     registry.register(IntRange.class, IntRange::of);
-    registry.registerCodec(Sounds.class, Sounds.CODEC.codec());
+    registry.registerCodec(Sounds.class, Sounds.CODEC.codec(), Sounds.DEFAULT);
+    registry.registerCodec(AmbientSound.class, AmbientSound.CODEC.codec(), AmbientSound.DEFAULT);
+    registry.registerCodec(MMRSoundType.class, MMRSoundType.CODEC.codec(), MMRSoundType.DEFAULT);
+    registry.registerEnumFromStringCodec(IOType.class, IOType.CODEC.codec());
+    registry.registerEnumFromStringCodec(TooltipUse.class, TooltipUse.CODEC.codec());
+    registry.register(BlockIngredient.class, o -> {
+      try {
+          return BlockIngredient.create(o);
+        } catch (CommandSyntaxException e) {
+          throw new IllegalArgumentException("Error parsing block ingredient: " + o + "\n" + e.getMessage());
+        }
+    });
+    registry.register(PartialBlockState.class, o -> {
+      if(o instanceof CharSequence charSequence) {
+        try {
+          return PartialBlockState.of(charSequence.toString());
+        } catch (CommandSyntaxException e) {
+          throw new IllegalArgumentException("Error parsing BlockState: " + o + "\n" + e.getMessage());
+        }
+      }
+      throw new IllegalArgumentException("BlockState must be a string");
+    });
+  }
+
+  @Override
+  public void generateData(KubeDataGenerator generator) {
+    KubeJSPlugin.super.generateData(generator);
+    var event = new ExtraTooltipsKubeEvent();
+    TOOLTIPS.post(event);
+    event.getBuilders().forEach(builder -> {
+      var id = builder.getId();
+      var useOn = builder.getUseOn();
+      ModularMachineryReborn
+          .MACHINE_EXTRA_TOOLTIPS
+          .compute(
+              id,
+              (k, v) -> v == null ? new EnumMap<>(TooltipUse.class) : v
+          ).compute(
+              useOn,
+              (k, v ) -> builder.build()
+          );
+    });
   }
 }

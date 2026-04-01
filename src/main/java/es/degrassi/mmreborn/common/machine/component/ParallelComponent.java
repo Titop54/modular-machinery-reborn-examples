@@ -20,13 +20,13 @@ public class ParallelComponent extends MachineComponent<Integer> {
   private final ParallelHatchSize parallel;
 
   public ParallelComponent(ParallelHatchSize parallel) {
-    super(IOType.INPUT);
+    super(IOType.NONE);
     this.parallel = parallel;
     this.cores = 1;
   }
 
   @Override
-  public ComponentType getComponentType() {
+  public ComponentType<Integer> getComponentType() {
     return ComponentRegistration.COMPONENT_PARALLEL.get();
   }
 
@@ -62,8 +62,13 @@ public class ParallelComponent extends MachineComponent<Integer> {
   }
 
   @Override
+  public <C extends MachineComponent<Integer>> boolean canMerge(C c) {
+    return false;
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
-  public <C extends MachineComponent<?>> C merge(C c) {
+  public <C extends MachineComponent<Integer>> C merge(C c) {
     return (C) this;
   }
 }

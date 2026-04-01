@@ -3,6 +3,9 @@ package es.degrassi.mmreborn.client.integration.emi;
 import com.google.common.collect.Lists;
 import dev.emi.emi.api.stack.EmiIngredient;
 import dev.emi.emi.api.stack.EmiStack;
+import dev.emi.emi.api.stack.FluidEmiStack;
+import es.degrassi.experiencelib.api.capability.IExperienceHandler;
+import es.degrassi.experiencelib.api.xei.emi.ExperienceEmiStack;
 import es.degrassi.mmreborn.api.TagUtil;
 import es.degrassi.mmreborn.api.crafting.requirement.RecipeRequirement;
 import es.degrassi.mmreborn.api.integration.emi.RegisterEmiComponentEvent;
@@ -11,30 +14,31 @@ import es.degrassi.mmreborn.api.integration.emi.RegisterEmiRequirementToIngredie
 import es.degrassi.mmreborn.api.integration.emi.RegisterEmiRequirementToStackEvent;
 import es.degrassi.mmreborn.common.crafting.requirement.RequirementDurability;
 import es.degrassi.mmreborn.common.crafting.requirement.RequirementDurabilityPerTick;
+import es.degrassi.mmreborn.common.crafting.requirement.RequirementExperience;
+import es.degrassi.mmreborn.common.crafting.requirement.RequirementExperiencePerTick;
+import es.degrassi.mmreborn.common.crafting.requirement.RequirementFluid;
+import es.degrassi.mmreborn.common.crafting.requirement.RequirementFluidPerTick;
 import es.degrassi.mmreborn.common.crafting.requirement.RequirementItem;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiBiomeComponent;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiChunkloadComponent;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiDimensionComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiDurabilityComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiDurabilityPerTickComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiEmptyComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiEnergyComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiEnergyPerTickComponent;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiExperienceComponent;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiExperiencePerTickComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiFluidComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiFluidPerTickComponent;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiHeightComponent;
+import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiFuelComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiItemComponent;
 import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiLootTableComponent;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiTimeComponent;
-import es.degrassi.mmreborn.common.crafting.requirement.emi.EmiWeatherComponent;
 import es.degrassi.mmreborn.common.integration.emi.EmiComponentRegistry;
 import es.degrassi.mmreborn.common.integration.emi.EmiEmptyRequirementRegistry;
 import es.degrassi.mmreborn.common.integration.emi.EmiIngredientRegistry;
 import es.degrassi.mmreborn.common.integration.emi.EmiStackRegistry;
 import es.degrassi.mmreborn.common.machine.component.DurabilityComponent;
+import es.degrassi.mmreborn.common.machine.component.ExperienceComponent;
+import es.degrassi.mmreborn.common.machine.component.FluidComponent;
 import es.degrassi.mmreborn.common.machine.component.ItemComponent;
+import es.degrassi.mmreborn.common.manager.handler.FluidHandler;
+import es.degrassi.mmreborn.common.manager.handler.ItemHandler;
 import es.degrassi.mmreborn.common.registration.EmptyRequirementTypeRegistration;
 import es.degrassi.mmreborn.common.registration.RequirementTypeRegistration;
 import es.degrassi.mmreborn.common.util.LootTableHelper;
@@ -77,20 +81,13 @@ public class MMREmiClientIntegration {
   public void registerEmiComponents(final RegisterEmiComponentEvent event) {
     event.register(RequirementTypeRegistration.ENERGY.get(), EmiEnergyComponent::new);
     event.register(RequirementTypeRegistration.ENERGY_PER_TICK.get(), EmiEnergyPerTickComponent::new);
-    event.register(RequirementTypeRegistration.EXPERIENCE.get(), EmiExperienceComponent::new);
-    event.register(RequirementTypeRegistration.EXPERIENCE_PER_TICK.get(), EmiExperiencePerTickComponent::new);
     event.register(RequirementTypeRegistration.ITEM.get(), EmiItemComponent::new);
     event.register(RequirementTypeRegistration.DURABILITY.get(), EmiDurabilityComponent::new);
     event.register(RequirementTypeRegistration.DURABILITY_PER_TICK.get(), EmiDurabilityPerTickComponent::new);
     event.register(RequirementTypeRegistration.FLUID.get(), EmiFluidComponent::new);
     event.register(RequirementTypeRegistration.FLUID_PER_TICK.get(), EmiFluidPerTickComponent::new);
-    event.register(RequirementTypeRegistration.BIOME.get(), EmiBiomeComponent::new);
-    event.register(RequirementTypeRegistration.TIME.get(), EmiTimeComponent::new);
-    event.register(RequirementTypeRegistration.HEIGHT.get(), EmiHeightComponent::new);
-    event.register(RequirementTypeRegistration.CHUNKLOAD.get(), EmiChunkloadComponent::new);
-    event.register(RequirementTypeRegistration.DIMENSION.get(), EmiDimensionComponent::new);
-    event.register(RequirementTypeRegistration.WEATHER.get(), EmiWeatherComponent::new);
     event.register(RequirementTypeRegistration.LOOT_TABLE.get(), EmiLootTableComponent::new);
+    event.register(RequirementTypeRegistration.FUEL.get(), EmiFuelComponent::new);
     event.register(RequirementTypeRegistration.EMPTY.get(), EmiEmptyComponent::new);
   }
 
@@ -109,16 +106,31 @@ public class MMREmiClientIntegration {
         this::emiStackFromDurabilityPerTickRequirement
     );
     event.register(
-        RequirementTypeRegistration.FLUID.get(),
-        requirement -> List.of(
-            EmiStack.of(requirement.requirement().required.asFluidStack().getFluid(), requirement.requirement().amount)
+        RequirementTypeRegistration.EXPERIENCE.get(),
+        req -> List.of(
+            new ExperienceEmiStack(req.requirement().getRequired())
         )
     );
     event.register(
-        RequirementTypeRegistration.FLUID_PER_TICK.get(),
-        requirement -> List.of(
-            EmiStack.of(requirement.requirement().required.asFluidStack().getFluid(), requirement.requirement().amount)
+        RequirementTypeRegistration.EXPERIENCE_PER_TICK.get(),
+        req -> List.of(
+            new ExperienceEmiStack(req.requirement().getRequired())
         )
+    );
+    event.register(
+        RequirementTypeRegistration.FLUID.get(),
+        requirement ->
+            Arrays.stream(requirement.requirement().getIngredient().ingredient().getStacks())
+                .map(stack -> EmiStack.of(stack.getFluid(), stack.getAmount()))
+                .toList()
+
+    );
+    event.register(
+        RequirementTypeRegistration.FLUID_PER_TICK.get(),
+        requirement ->
+            Arrays.stream(requirement.requirement().getIngredient().ingredient().getStacks())
+            .map(stack -> EmiStack.of(stack.getFluid(), stack.getAmount()))
+            .toList()
     );
     event.register(
         RequirementTypeRegistration.LOOT_TABLE.get(),
@@ -138,6 +150,22 @@ public class MMREmiClientIntegration {
         this::emiIngredientFromItemRequirement
     );
     event.register(
+        RequirementTypeRegistration.FLUID.get(),
+        this::emiIngredientFromFluidRequirement
+    );
+    event.register(
+        RequirementTypeRegistration.FLUID_PER_TICK.get(),
+        this::emiIngredientFromFluidPerTickRequirement
+    );
+    event.register(
+        RequirementTypeRegistration.EXPERIENCE.get(),
+        this::emiIngredientFromExperienceRequirement
+    );
+    event.register(
+        RequirementTypeRegistration.EXPERIENCE_PER_TICK.get(),
+        this::emiIngredientFromExperiencePerTickRequirement
+    );
+    event.register(
         RequirementTypeRegistration.DURABILITY.get(),
         this::emiIngredientFromDurabilityRequirement
     );
@@ -147,16 +175,38 @@ public class MMREmiClientIntegration {
     );
   }
 
-  private EmiIngredient emiIngredientFromItemRequirement(RecipeRequirement<ItemComponent, RequirementItem> requirement) {
+  private EmiIngredient emiIngredientFromExperienceRequirement(RecipeRequirement<ExperienceComponent, RequirementExperience, IExperienceHandler> requirement) {
+    return new ExperienceEmiStack(requirement.requirement().getRequired());
+  }
+
+  private EmiIngredient emiIngredientFromExperiencePerTickRequirement(RecipeRequirement<ExperienceComponent, RequirementExperiencePerTick, IExperienceHandler> requirement) {
+    return new ExperienceEmiStack(requirement.requirement().getRequired());
+  }
+
+  private EmiIngredient emiIngredientFromFluidRequirement(RecipeRequirement<FluidComponent, RequirementFluid, FluidHandler> requirement) {
+    List<FluidEmiStack> stacks = Arrays.stream(requirement.requirement().getIngredient().ingredient().getStacks())
+        .map(stack -> new FluidEmiStack(stack.getFluid(), stack.getComponentsPatch(), requirement.requirement().getIngredient().amount()))
+        .toList();
+    return EmiIngredient.of(stacks);
+  }
+
+  private EmiIngredient emiIngredientFromFluidPerTickRequirement(RecipeRequirement<FluidComponent, RequirementFluidPerTick,
+      FluidHandler> requirement) {
+    List<FluidEmiStack> stacks = Arrays.stream(requirement.requirement().getIngredient().ingredient().getStacks())
+        .map(stack -> new FluidEmiStack(stack.getFluid(), stack.getComponentsPatch(), requirement.requirement().getIngredient().amount()))
+        .toList();
+    return EmiIngredient.of(stacks);
+  }
+
+  private EmiIngredient emiIngredientFromItemRequirement(RecipeRequirement<ItemComponent, RequirementItem, ItemHandler> requirement) {
     return EmiIngredient.of(requirement.requirement().ingredient.ingredient(), requirement.requirement().ingredient.count());
   }
 
-  private EmiIngredient emiIngredientFromDurabilityRequirement(RecipeRequirement<DurabilityComponent, RequirementDurability> requirement) {
+  private EmiIngredient emiIngredientFromDurabilityRequirement(RecipeRequirement<DurabilityComponent, RequirementDurability, ItemHandler> requirement) {
     return EmiIngredient.of(ingredientFromDurabilityRequirement(requirement.requirement().ingredient), requirement.requirement().getAmount());
   }
 
-  private EmiIngredient emiIngredientFromDurabilityPerTickRequirement(RecipeRequirement<DurabilityComponent,
-      RequirementDurabilityPerTick> requirement) {
+  private EmiIngredient emiIngredientFromDurabilityPerTickRequirement(RecipeRequirement<DurabilityComponent, RequirementDurabilityPerTick, ItemHandler> requirement) {
     return EmiIngredient.of(ingredientFromDurabilityRequirement(requirement.requirement().ingredient), requirement.requirement().getAmount());
   }
 
@@ -169,7 +219,7 @@ public class MMREmiClientIntegration {
     return Ingredient.of(items.stream());
   }
 
-  private List<EmiStack> emiStackFromItemRequirement(RecipeRequirement<ItemComponent, RequirementItem> requirement) {
+  private List<EmiStack> emiStackFromItemRequirement(RecipeRequirement<ItemComponent, RequirementItem, ItemHandler> requirement) {
     List<EmiStack> stacks = Lists.newArrayList();
     for (Ingredient.Value value : requirement.requirement().getIngredient().ingredient().values) {
       if (value instanceof Ingredient.TagValue(TagKey<Item> tag)) {
@@ -183,7 +233,7 @@ public class MMREmiClientIntegration {
     return stacks;
   }
 
-  private List<EmiStack> emiStackFromDurabilityRequirement(RecipeRequirement<DurabilityComponent, RequirementDurability> requirement) {
+  private List<EmiStack> emiStackFromDurabilityRequirement(RecipeRequirement<DurabilityComponent, RequirementDurability, ItemHandler> requirement) {
     List<EmiStack> stacks = Lists.newArrayList();
     for (Ingredient.Value value : requirement.requirement().getIngredient().values) {
       if (value instanceof Ingredient.TagValue(TagKey<Item> tag)) {
@@ -197,8 +247,7 @@ public class MMREmiClientIntegration {
     return stacks.stream().unordered().toList();
   }
 
-  private List<EmiStack> emiStackFromDurabilityPerTickRequirement(RecipeRequirement<DurabilityComponent,
-      RequirementDurabilityPerTick> requirement) {
+  private List<EmiStack> emiStackFromDurabilityPerTickRequirement(RecipeRequirement<DurabilityComponent, RequirementDurabilityPerTick, ItemHandler> requirement) {
     List<EmiStack> stacks = Lists.newArrayList();
     for (Ingredient.Value value : requirement.requirement().getIngredient().values) {
       if (value instanceof Ingredient.TagValue(TagKey<Item> tag)) {

@@ -3,6 +3,9 @@ package es.degrassi.mmreborn.client.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import es.degrassi.mmreborn.ModularMachineryReborn;
 import es.degrassi.mmreborn.client.container.ContainerBase;
+import es.degrassi.mmreborn.client.screen.widget.GuiElement;
+import es.degrassi.mmreborn.client.screen.widget.IGuiWrapper;
+import es.degrassi.mmreborn.client.screen.widget.tabs.TabGroupWidget;
 import es.degrassi.mmreborn.common.entity.base.ColorableMachineComponentEntity;
 import es.degrassi.mmreborn.common.util.TextureSizeHelper;
 import net.minecraft.ChatFormatting;
@@ -19,14 +22,20 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.event.ContainerScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public abstract class BaseScreen<T extends ContainerBase<E>, E extends ColorableMachineComponentEntity> extends AbstractContainerScreen<T> {
+import java.util.function.Predicate;
+
+public abstract class BaseScreen<T extends ContainerBase<E>, E extends ColorableMachineComponentEntity> extends AbstractContainerScreen<T> implements IGuiWrapper {
   public static final ResourceLocation BASE_SLOT = ModularMachineryReborn.rl("textures/gui/base_slot.png");
   public static final ResourceLocation BASE_SLOT_HOVERED = ModularMachineryReborn.rl("textures/gui/base_slot_hovered.png");
-  public static final ResourceLocation TAB = ModularMachineryReborn.rl("textures/gui/widget/base_tab.png");
-  public static final ResourceLocation TAB_HOVERED = ModularMachineryReborn.rl("textures/gui/widget/base_tab_hovered.png");
+  public static final ResourceLocation TAB = ModularMachineryReborn.rl("textures/gui/widget/base_tab_top.png");
+  public static final ResourceLocation TAB_HOVERED = ModularMachineryReborn.rl("textures/gui/widget/base_tab_hovered_top.png");
+  public static final ResourceLocation SCROLLBAR_BACKGROUND = ModularMachineryReborn.rl("small_scroller_disabled");
+  public static final ResourceLocation SCROLLBAR_THUMB = ModularMachineryReborn.rl("small_scroller");
+
+  public static final int SLOT_SIZE = 18;
+  protected boolean hasClicked = false;
 
   protected final E entity;
   protected final boolean shouldRenderLabels;
@@ -36,13 +45,54 @@ public abstract class BaseScreen<T extends ContainerBase<E>, E extends Colorable
     this.shouldRenderLabels = renderLabels;
   }
 
+  @Override
+  public ItemStack getCarriedItem() {
+    return getMenu().getCarried();
+  }
+
+  @Override
+  public @Nullable BaseScreen<?, ?> getWindowHovering(double mouseX, double mouseY) {
+    if (mouseX >= getGuiLeft() && mouseX <= getGuiLeft() + this.imageWidth && mouseY >= getGuiTop() && mouseY <= getGuiTop() + this.imageHeight
+        || this.children().stream().anyMatch(child -> child.isMouseOver(mouseX, mouseY)))
+      return this;
+    return null;
+  }
+
+  public void renderSlotHighlight(GuiGraphics guiGraphics, Slot slot, int mouseX, int mouseY, float partialTick) {
+    renderSlotHighlight(guiGraphics, slot, mouseX, mouseY, partialTick, 0);
+  }
+
   @Nullable
   public ResourceLocation getTexture() {
     return ModularMachineryReborn.rl("background");
   }
 
+  public static ResourceLocation getScrollbarBackground() {
+    return SCROLLBAR_BACKGROUND;
+  }
+
+  public static ResourceLocation getScrollbarThumb() {
+    return SCROLLBAR_THUMB;
+  }
+
+  public static int getScrollbarBackgroundWidth() {
+    return TextureSizeHelper.getWidth(ModularMachineryReborn.rl("textures/gui/sprites/" + getScrollbarBackground().getPath()));
+  }
+
+  public static int getScrollbarBackgroundHeight() {
+    return TextureSizeHelper.getHeight(ModularMachineryReborn.rl("textures/gui/sprites/" + getScrollbarBackground().getPath()));
+  }
+
+  public static int getScrollbarWidth() {
+    return TextureSizeHelper.getWidth(ModularMachineryReborn.rl("textures/gui/sprites/" + getScrollbarThumb().getPath()));
+  }
+
+  public static int getScrollbarHeight() {
+    return TextureSizeHelper.getHeight(ModularMachineryReborn.rl("textures/gui/sprites/" + getScrollbarThumb().getPath()));
+  }
+
   @Override
-  public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+  public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
     int i = this.leftPos;
     int j = this.topPos;
     // Neo: replicate the super method's implementation to insert the event between background and widgets
@@ -106,8 +156,27 @@ public abstract class BaseScreen<T extends ContainerBase<E>, E extends Colorable
   }
 
   @Override
+  public void renderSlot(GuiGraphics guiGraphics, Slot slot) {
+    guiGraphics.blit(BaseScreen.BASE_SLOT, slot.x - 1, slot.y - 1, 0, 0, BaseScreen.SLOT_SIZE,
+        BaseScreen.SLOT_SIZE,
+        TextureSizeHelper.getWidth(BaseScreen.BASE_SLOT), TextureSizeHelper.getHeight(BaseScreen.BASE_SLOT));
+    super.renderSlot(guiGraphics, slot);
+  }
+
+  @Override
   protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
     if (this.shouldRenderLabels) super.renderLabels(guiGraphics, mouseX, mouseY);
+  }
+
+  @Override
+  protected void renderTooltip(GuiGraphics guiGraphics, int x, int y) {
+    super.renderTooltip(guiGraphics, x, y);
+
+    for (var element : children()) {
+      if (element instanceof TabGroupWidget widget) {
+        widget.renderTooltip(guiGraphics, x, y);
+      }
+    }
   }
 
   @Override
@@ -149,17 +218,27 @@ public abstract class BaseScreen<T extends ContainerBase<E>, E extends Colorable
     }
   }
 
-  protected void renderSlotHighlight(GuiGraphics guiGraphics, Slot slot, int mouseX, int mouseY, float partialTick) {
-    if (slot.isHighlightable()) {
-      renderSlotHighlight(guiGraphics, slot.x, slot.y, getSlotColor(slot.index));
-    }
-  }
-
-  public static void renderSlotHighlight(GuiGraphics guiGraphics, int x, int y, int color) {
+  public static void renderSlotHighlight(GuiGraphics guiGraphics, int x, int y, int color, int z) {
     guiGraphics.pose().pushPose();
     int width = TextureSizeHelper.getWidth(BASE_SLOT_HOVERED), height = TextureSizeHelper.getHeight(BASE_SLOT_HOVERED);
     guiGraphics.blit(BASE_SLOT_HOVERED, x - 1, y - 1, 0, 0, width, height, width, height);
-    guiGraphics.fillGradient(RenderType.guiOverlay(), x, y, x + 16, y + 16, color, color, 0);
+    guiGraphics.fillGradient(RenderType.guiOverlay(), x, y, x + 16, y + 16, color, color, z);
     guiGraphics.pose().popPose();
+  }
+
+  public void setHoveredSlot(Slot slot) {
+    this.hoveredSlot = slot;
+  }
+
+  public boolean childrenContainsElement(Predicate<GuiElement> predicate) {
+    return children().stream()
+        .filter(el -> el instanceof GuiElement)
+        .map(el -> (GuiElement) el)
+        .anyMatch(predicate);
+  }
+
+  @Override
+  public int getSlotColor() {
+    return this.slotColor;
   }
 }

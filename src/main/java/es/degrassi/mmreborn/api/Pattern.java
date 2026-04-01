@@ -62,29 +62,21 @@ public class Pattern {
     this.modifiers_west = rotateModifiers(Rotation.COUNTERCLOCKWISE_90);
     this.modifiers_east = rotateModifiers(Rotation.CLOCKWISE_90);
 
-    modifiers_north.forEach((pos, modifierList) -> {
-      modifierList.forEach(modifier -> {
-        pattern_north.put(pos, modifier.getIngredient().copyWithRotation(Rotation.NONE).merge(pattern_north.get(pos)));
-      });
-    });
+    modifiers_north.forEach((pos, modifierList) -> modifierList
+        .forEach(modifier -> pattern_north
+            .put(pos, modifier.getIngredient().copyWithRotation(Rotation.NONE).merge(pattern_north.get(pos)))));
 
-    modifiers_south.forEach((pos, modifierList) -> {
-      modifierList.forEach(modifier -> {
-        pattern_south.put(pos, modifier.getIngredient().copyWithRotation(Rotation.CLOCKWISE_180).merge(pattern_south.get(pos)));
-      });
-    });
+    modifiers_south.forEach((pos, modifierList) -> modifierList
+        .forEach(modifier -> pattern_south
+            .put(pos, modifier.getIngredient().copyWithRotation(Rotation.CLOCKWISE_180).merge(pattern_south.get(pos)))));
 
-    modifiers_west.forEach((pos, modifierList) -> {
-      modifierList.forEach(modifier -> {
-        pattern_west.put(pos, modifier.getIngredient().copyWithRotation(Rotation.COUNTERCLOCKWISE_90).merge(pattern_west.get(pos)));
-      });
-    });
+    modifiers_west.forEach((pos, modifierList) -> modifierList
+        .forEach(modifier -> pattern_west
+            .put(pos, modifier.getIngredient().copyWithRotation(Rotation.COUNTERCLOCKWISE_90).merge(pattern_west.get(pos)))));
 
-    modifiers_east.forEach((pos, modifierList) -> {
-      modifierList.forEach(modifier -> {
-        pattern_east.put(pos, modifier.getIngredient().copyWithRotation(Rotation.CLOCKWISE_90).merge(pattern_east.get(pos)));
-      });
-    });
+    modifiers_east.forEach((pos, modifierList) -> modifierList
+        .forEach(modifier -> pattern_east
+            .put(pos, modifier.getIngredient().copyWithRotation(Rotation.CLOCKWISE_90).merge(pattern_east.get(pos)))));
   }
 
   public Map<BlockPos, BlockIngredient> get(Direction direction) {
@@ -139,15 +131,23 @@ public class Pattern {
     return keys;
   }
 
-  public boolean match(LevelReader world, BlockPos machinePos, Direction machineFacing) {
+  public boolean match(LevelReader world, BlockPos machinePos, Direction machineFacing, MinBlocksPredicate predicate) {
     Map<BlockPos, BlockIngredient> blocks = get(machineFacing);
     BlockPos.MutableBlockPos worldPos = new BlockPos.MutableBlockPos();
     for (BlockPos pos : blocks.keySet()) {
       BlockIngredient ingredient = blocks.get(pos);
       worldPos.set(pos.getX() + machinePos.getX(), pos.getY() + machinePos.getY(), pos.getZ() + machinePos.getZ());
       BlockInWorld info = new BlockInWorld(world, worldPos, false);
-      if (ingredient.getAll().stream().noneMatch(state -> state.test(info)))
+      if (!predicate.test(ingredient, info)) return false;
+    }
+    for (var entry : predicate.getTests().object2IntEntrySet()) {
+      var ing = entry.getKey();
+      var found = entry.getIntValue();
+      var minmax = predicate.minBlocks().get(ing);
+      if (!minmax.test(found)) {
+        predicate.getErrors().add(minmax.errorMessage(found, ing.getNamesUnified()));
         return false;
+      }
     }
     return true;
   }

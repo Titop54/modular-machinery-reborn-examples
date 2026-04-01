@@ -3,31 +3,33 @@ package es.degrassi.mmreborn.common.crafting.requirement;
 import es.degrassi.mmreborn.api.codec.NamedCodec;
 import es.degrassi.mmreborn.api.crafting.CraftingResult;
 import es.degrassi.mmreborn.api.crafting.ICraftingContext;
+import es.degrassi.mmreborn.api.crafting.requirement.IDisplayInfo;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirement;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirementList;
+import es.degrassi.mmreborn.api.crafting.requirement.RecipeRequirement;
 import es.degrassi.mmreborn.common.crafting.ComponentType;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.component.HeightComponent;
 import es.degrassi.mmreborn.common.registration.ComponentRegistration;
+import es.degrassi.mmreborn.common.registration.ItemRegistration;
 import es.degrassi.mmreborn.common.registration.RequirementTypeRegistration;
 import es.degrassi.mmreborn.common.util.IntRange;
 import lombok.Getter;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
-public class RequirementHeight implements IRequirement<HeightComponent> {
+public class RequirementHeight implements IRequirement<HeightComponent, IntRange> {
   public static final NamedCodec<RequirementHeight> CODEC = NamedCodec.record(instance -> instance.group(
-      IntRange.CODEC.fieldOf("range").forGetter(RequirementHeight::height),
-      PositionedRequirement.POSITION_CODEC.optionalFieldOf("position", new PositionedRequirement(0, 0)).forGetter(IRequirement::getPosition)
+      IntRange.CODEC.fieldOf("range").forGetter(RequirementHeight::height)
   ).apply(instance, RequirementHeight::new), "Height Requirement");
 
   private final IntRange height;
   @Getter
   private final PositionedRequirement position;
 
-  public RequirementHeight(IntRange height, PositionedRequirement position) {
+  public RequirementHeight(IntRange height) {
     this.height = height;
-    this.position = position;
+    this.position = new PositionedRequirement(0, 0);
   }
 
   public IntRange height() {
@@ -35,12 +37,12 @@ public class RequirementHeight implements IRequirement<HeightComponent> {
   }
 
   @Override
-  public RequirementType<RequirementHeight> getType() {
+  public RequirementType<RequirementHeight, HeightComponent, IntRange> getType() {
     return RequirementTypeRegistration.HEIGHT.get();
   }
 
   @Override
-  public ComponentType getComponentType() {
+  public ComponentType<IntRange> getComponentType() {
     return ComponentRegistration.COMPONENT_HEIGHT.get();
   }
 
@@ -78,5 +80,14 @@ public class RequirementHeight implements IRequirement<HeightComponent> {
   @Override
   public boolean isComponentValid(HeightComponent m, ICraftingContext context) {
     return getMode().equals(m.getIOType());
+  }
+
+  @Override
+  public void getDefaultDisplayInfo(IDisplayInfo info, RecipeRequirement<?, ?, ?> requirement) {
+    info.addTooltip(Component.translatable(
+        "modular_machinery_reborn.jei.ingredient.height",
+        height().toFormattedString()
+    ));
+    info.setItemIcon(ItemRegistration.HEIGHT_METER.asItem());
   }
 }

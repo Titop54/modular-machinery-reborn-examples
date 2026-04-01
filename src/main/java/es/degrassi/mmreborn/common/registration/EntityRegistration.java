@@ -4,31 +4,43 @@ import es.degrassi.mmreborn.ModularMachineryReborn;
 import es.degrassi.mmreborn.common.block.BlockDynamicColor;
 import es.degrassi.mmreborn.common.entity.BiomeReaderEntity;
 import es.degrassi.mmreborn.common.entity.ChunkloaderEntity;
+import es.degrassi.mmreborn.common.entity.CommandExecutionerEntity;
 import es.degrassi.mmreborn.common.entity.DimensionalDetectorEntity;
+import es.degrassi.mmreborn.common.entity.EffectDispenserEntity;
 import es.degrassi.mmreborn.common.entity.EnergyInputHatchEntity;
 import es.degrassi.mmreborn.common.entity.EnergyOutputHatchEntity;
+import es.degrassi.mmreborn.common.entity.EntityDetectorEntity;
+import es.degrassi.mmreborn.common.entity.EntitySpawnerEntity;
+import es.degrassi.mmreborn.common.entity.EntityKillerEntity;
 import es.degrassi.mmreborn.common.entity.ExperienceInputHatchEntity;
 import es.degrassi.mmreborn.common.entity.ExperienceOutputHatchEntity;
 import es.degrassi.mmreborn.common.entity.FluidInputHatchEntity;
 import es.degrassi.mmreborn.common.entity.FluidOutputHatchEntity;
+import es.degrassi.mmreborn.common.entity.FuelTankEntity;
+import es.degrassi.mmreborn.common.entity.EntityHealerEntity;
 import es.degrassi.mmreborn.common.entity.HeightMeterEntity;
+import es.degrassi.mmreborn.common.entity.EntityDamagerEntity;
 import es.degrassi.mmreborn.common.entity.ItemInputBusEntity;
 import es.degrassi.mmreborn.common.entity.ItemOutputBusEntity;
 import es.degrassi.mmreborn.common.entity.MachineControllerEntity;
 import es.degrassi.mmreborn.common.entity.ParallelHatchEntity;
+import es.degrassi.mmreborn.common.entity.RedstonePortEntity;
+import es.degrassi.mmreborn.common.entity.StructureCheckerEntity;
 import es.degrassi.mmreborn.common.entity.TimeCounterEntity;
 import es.degrassi.mmreborn.common.entity.WeatherSensorEntity;
 import es.degrassi.mmreborn.common.entity.base.ColorableMachineComponentEntity;
-import es.degrassi.mmreborn.common.entity.base.DurabilityHatchEntity;
+import es.degrassi.mmreborn.common.entity.DurabilityHatchEntity;
 import es.degrassi.mmreborn.common.entity.base.EnergyHatchEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.entity.CommandBlockEntity;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -270,6 +282,107 @@ public class EntityRegistration {
               BlockRegistration.PARALLEL_HATCH_MAX.get()
           ),
           null)
+  );
+
+  public static final Supplier<BlockEntityType<FuelTankEntity>> FUEL_TANK = ENTITY_TYPE.register(
+      rootLC("fuel_tank"),
+      () -> new BlockEntityType<>(
+          FuelTankEntity::new,
+          Set.of(
+              BlockRegistration.FUEL_TANK_TINY.get(),
+              BlockRegistration.FUEL_TANK_SMALL.get(),
+              BlockRegistration.FUEL_TANK_NORMAL.get(),
+              BlockRegistration.FUEL_TANK_REINFORCED.get(),
+              BlockRegistration.FUEL_TANK_BIG.get(),
+              BlockRegistration.FUEL_TANK_HUGE.get()
+          ),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<EffectDispenserEntity>> EFFECT_DISPENSER = ENTITY_TYPE.register(
+      rootLC("effect_dispenser"),
+      () -> new BlockEntityType<>(
+          EffectDispenserEntity::new,
+          Set.of(
+              BlockRegistration.EFFECT_DISPENSER_SMALL.get(),
+              BlockRegistration.EFFECT_DISPENSER_MEDIUM.get(),
+              BlockRegistration.EFFECT_DISPENSER_BIG.get()
+          ),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<EntityDetectorEntity>> ENTITY_DETECTOR = ENTITY_TYPE.register(
+     rootLC("entity_detector"),
+      () -> new BlockEntityType<>(
+          EntityDetectorEntity::new,
+          Set.of(BlockRegistration.ENTITY_DETECTOR.get()),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<EntitySpawnerEntity>> ENTITY_SPAWNER = ENTITY_TYPE.register(
+      rootLC("entity_spawner"),
+      () -> new BlockEntityType<>(
+          EntitySpawnerEntity::new,
+          Set.of(BlockRegistration.ENTITY_SPAWNER.get()),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<EntityDamagerEntity>> ENTITY_DAMAGER = ENTITY_TYPE.register(
+      rootLC("entity_damager"),
+      () -> new BlockEntityType<>(
+          EntityDamagerEntity::new,
+          Set.of(BlockRegistration.ENTITY_DAMAGER.get()),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<EntityHealerEntity>> ENTITY_HEALER = ENTITY_TYPE.register(
+      rootLC("entity_healer"),
+      () -> new BlockEntityType<>(
+          EntityHealerEntity::new,
+          Set.of(BlockRegistration.ENTITY_HEALER.get()),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<EntityKillerEntity>> ENTITY_KILLER = ENTITY_TYPE.register(
+      rootLC("entity_killer"),
+      () -> new BlockEntityType<>(
+          EntityKillerEntity::new,
+          Set.of(BlockRegistration.ENTITY_KILLER.get()),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<StructureCheckerEntity>> STRUCTURE_CHECKER = ENTITY_TYPE.register(
+      rootLC("structure_checker"),
+      () -> new BlockEntityType<>(
+          StructureCheckerEntity::new,
+          Set.of(BlockRegistration.STRUCTURE_CHECKER.get()),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<RedstonePortEntity>> REDSTONE_PORT = ENTITY_TYPE.register(
+      rootLC("REDSTONE_PORT".toLowerCase(Locale.ENGLISH)),
+      () -> new BlockEntityType<>(
+          RedstonePortEntity::new,
+          Set.of(BlockRegistration.REDSTONE_PORT.get()),
+          null
+      )
+  );
+
+  public static final Supplier<BlockEntityType<CommandExecutionerEntity>> COMMAND_EXECUTIONER = ENTITY_TYPE.register(
+      rootLC("command_executioner"),
+      () -> new BlockEntityType<>(
+          CommandExecutionerEntity::new,
+          Set.of(BlockRegistration.COMMAND_EXECUTIONER.get()),
+          null
+      )
   );
 
   public static void register(final IEventBus bus) {

@@ -2,12 +2,15 @@ package es.degrassi.mmreborn.common.crafting.requirement;
 
 import com.google.gson.JsonObject;
 import es.degrassi.experiencelib.api.capability.IExperienceHandler;
+import es.degrassi.experiencelib.util.ExperienceUtils;
 import es.degrassi.mmreborn.api.codec.NamedCodec;
 import es.degrassi.mmreborn.api.codec.NamedMapCodec;
 import es.degrassi.mmreborn.api.crafting.CraftingResult;
 import es.degrassi.mmreborn.api.crafting.ICraftingContext;
+import es.degrassi.mmreborn.api.crafting.requirement.IDisplayInfo;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirement;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirementList;
+import es.degrassi.mmreborn.api.crafting.requirement.RecipeRequirement;
 import es.degrassi.mmreborn.common.crafting.ComponentType;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.component.ExperienceComponent;
@@ -15,33 +18,33 @@ import es.degrassi.mmreborn.common.registration.ComponentRegistration;
 import es.degrassi.mmreborn.common.registration.RequirementTypeRegistration;
 import lombok.Getter;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 
 @Getter
-public class RequirementExperience implements IRequirement<ExperienceComponent> {
+public class RequirementExperience implements IRequirement<ExperienceComponent, IExperienceHandler> {
   public static final NamedMapCodec<RequirementExperience> CODEC = NamedCodec.record(instance -> instance.group(
       NamedCodec.longRange(0, Long.MAX_VALUE).fieldOf("amount").forGetter(req -> req.required),
-      NamedCodec.enumCodec(IOType.class).fieldOf("mode").forGetter(IRequirement::getMode),
-      PositionedRequirement.POSITION_CODEC.optionalFieldOf("position", new PositionedRequirement(0, 0)).forGetter(IRequirement::getPosition)
-  ).apply(instance, (amount, type, position) -> new RequirementExperience(type, amount, position)), "EnergyRequirement");
+      NamedCodec.enumCodec(IOType.class).fieldOf("mode").forGetter(IRequirement::getMode)
+  ).apply(instance, (amount, type) -> new RequirementExperience(type, amount)), "ExperienceRequirement");
 
   private final IOType mode;
   private final PositionedRequirement position;
   public final long required;
 
-  public RequirementExperience(IOType actionType, long amount, PositionedRequirement position) {
+  public RequirementExperience(IOType actionType, long amount) {
     this.required = amount;
-    this.position = position;
+    this.position = new PositionedRequirement(0, 0);
     this.mode = actionType;
   }
 
   @Override
-  public RequirementType<RequirementExperience> getType() {
+  public RequirementType<RequirementExperience, ExperienceComponent, IExperienceHandler> getType() {
     return RequirementTypeRegistration.EXPERIENCE.get();
   }
 
   @Override
-  public ComponentType getComponentType() {
+  public ComponentType<IExperienceHandler> getComponentType() {
     return ComponentRegistration.COMPONENT_EXPERIENCE.get();
   }
 
@@ -68,7 +71,7 @@ public class RequirementExperience implements IRequirement<ExperienceComponent> 
     long amount = (long) context.getModifiedValue(required, this);
     final long originAmount = amount;
     long canExtract = 0;
-    for (int i = 0; i < component.getContainerProvider().getTanks(); i++) {
+    for (int i = 0; i < component.getContainerProvider().getTanks() && amount > 0; i++) {
        long toExtract = component.getContainerProvider().extractExperienceRecipe(i, amount, true);
        canExtract += toExtract;
        amount -= toExtract;
@@ -116,5 +119,18 @@ public class RequirementExperience implements IRequirement<ExperienceComponent> 
   @Override
   public boolean isComponentValid(ExperienceComponent m, ICraftingContext context) {
     return getMode().equals(m.getIOType());
+  }
+
+  @Override
+  public void getDefaultDisplayInfo(IDisplayInfo info, RecipeRequirement<?, ?, ?> requirement) {
+    String literal = String.format("%s XP", ExperienceUtils.format(getRequired()));
+    String level =  ExperienceUtils.format(ExperienceUtils.getLevelFromXp(getRequired()));
+    info.addTooltip(
+        Component.translatable("mmr.gui.element.experience.tooltip." + getMode().getSerializedName(),
+            literal,
+            Component.translatable("mmr.gui.element.experience.level", level)
+        )
+    );
+    info.setItemIcon(Items.EXPERIENCE_BOTTLE);
   }
 }

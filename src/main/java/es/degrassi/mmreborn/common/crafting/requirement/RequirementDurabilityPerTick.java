@@ -14,6 +14,7 @@ import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.component.DurabilityComponent;
 import es.degrassi.mmreborn.common.registration.ComponentRegistration;
 import es.degrassi.mmreborn.common.registration.RequirementTypeRegistration;
+import es.degrassi.mmreborn.common.manager.handler.ItemHandler;
 import lombok.Getter;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -26,7 +27,7 @@ import java.util.function.Function;
 
 @Getter
 @SuppressWarnings("UnstableApiUsage")
-public class RequirementDurabilityPerTick implements IRequirement<DurabilityComponent> {
+public class RequirementDurabilityPerTick implements IRequirement<DurabilityComponent, ItemHandler> {
   public static final NamedCodec<RequirementDurabilityPerTick> CODEC = NamedCodec.record(instance -> instance.group(
           NamedCodec.of(CraftingHelper.makeIngredientCodec(true)).fieldOf("ingredient").aliases("item").forGetter(req -> req.ingredient),
           NamedCodec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("amount", 1).forGetter(RequirementDurabilityPerTick::getAmount),
@@ -48,12 +49,12 @@ public class RequirementDurabilityPerTick implements IRequirement<DurabilityComp
   }
 
   @Override
-  public RequirementType<RequirementDurabilityPerTick> getType() {
+  public RequirementType<RequirementDurabilityPerTick, DurabilityComponent, ItemHandler> getType() {
     return RequirementTypeRegistration.DURABILITY_PER_TICK.get();
   }
 
   @Override
-  public ComponentType getComponentType() {
+  public ComponentType<ItemHandler> getComponentType() {
     return ComponentRegistration.COMPONENT_DURABILITY.get();
   }
 
@@ -63,7 +64,7 @@ public class RequirementDurabilityPerTick implements IRequirement<DurabilityComp
     if(getMode().isInput())
       return processWithLog(amount -> Arrays.stream(this.ingredient.getItems()).mapToInt(item -> component.getContainerProvider().getDurabilityAmount(item)).sum() >= amount, a);
     else
-      return processWithLog(amount -> Arrays.stream(this.ingredient.getItems()).mapToInt(item -> component.getContainerProvider().getSpaceForDurability(item)).sum() >= amount, 1);
+      return processWithLog(amount -> Arrays.stream(this.ingredient.getItems()).mapToInt(item -> component.getContainerProvider().getSpaceForDurability(item)).sum() >= amount, a);
   }
 
   private boolean processWithLog(Function<Integer, Boolean> function, int amount) {

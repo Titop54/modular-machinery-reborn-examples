@@ -1,7 +1,6 @@
 package es.degrassi.mmreborn.common.crafting.requirement;
 
 import com.google.gson.JsonObject;
-import es.degrassi.mmreborn.api.FluidIngredient;
 import es.degrassi.mmreborn.api.codec.NamedCodec;
 import es.degrassi.mmreborn.api.codec.NamedMapCodec;
 import es.degrassi.mmreborn.api.crafting.CraftingResult;
@@ -9,70 +8,66 @@ import es.degrassi.mmreborn.api.crafting.ICraftingContext;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirement;
 import es.degrassi.mmreborn.api.crafting.requirement.IRequirementList;
 import es.degrassi.mmreborn.common.crafting.ComponentType;
-import es.degrassi.mmreborn.common.integration.ingredient.HybridFluid;
 import es.degrassi.mmreborn.common.machine.IOType;
 import es.degrassi.mmreborn.common.machine.component.FluidComponent;
+import es.degrassi.mmreborn.common.manager.handler.FluidHandler;
 import es.degrassi.mmreborn.common.registration.ComponentRegistration;
 import es.degrassi.mmreborn.common.registration.RequirementTypeRegistration;
-import es.degrassi.mmreborn.common.util.HybridTank;
 import lombok.Getter;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
-import org.jetbrains.annotations.NotNull;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 
-import java.util.Optional;
+import java.util.Arrays;
 
-public class RequirementFluidPerTick implements IRequirement<FluidComponent> {
+@Getter
+public class RequirementFluidPerTick implements IRequirement<FluidComponent, FluidHandler> {
   public static final NamedMapCodec<RequirementFluidPerTick> CODEC = NamedCodec.record(instance -> instance.group(
-      FluidIngredient.CODEC.fieldOf("fluid").forGetter(req -> req.ingredient),
+      NamedCodec.of(SizedFluidIngredient.FLAT_CODEC).fieldOf("fluid").forGetter(req -> req.ingredient),
       NamedCodec.enumCodec(IOType.class).fieldOf("mode").forGetter(IRequirement::getMode),
-      NamedCodec.INT.optionalFieldOf("amount").forGetter(req -> Optional.of(req.amount)),
       PositionedRequirement.POSITION_CODEC.optionalFieldOf("position", new PositionedRequirement(0, 0)).forGetter(IRequirement::getPosition)
-  ).apply(instance, (fluid, mode, amount, position) -> new RequirementFluidPerTick(mode, fluid, amount.orElse(1000), position)), "FluidRequirement");
+  ).apply(instance, (fluid, mode, position) -> new RequirementFluidPerTick(mode, fluid, position)), "FluidRequirement");
 
-  @Getter
   private final PositionedRequirement position;
-  @Getter
   private final IOType mode;
-  public final HybridFluid required;
-  public final int amount;
-  private final FluidIngredient ingredient;
+  private final SizedFluidIngredient ingredient;
 
-  public RequirementFluidPerTick(IOType ioType, FluidIngredient fluid, int amount, PositionedRequirement position) {
+  public RequirementFluidPerTick(IOType ioType, SizedFluidIngredient fluid, PositionedRequirement position) {
     this.ingredient = fluid;
-    this.required = new HybridFluid(new FluidStack(fluid.getAll().getFirst(), amount));
-    this.amount = amount;
     this.position = position;
     this.mode = ioType;
   }
 
   @Override
-  public RequirementType<RequirementFluidPerTick> getType() {
+  public RequirementType<RequirementFluidPerTick, FluidComponent, FluidHandler> getType() {
     return RequirementTypeRegistration.FLUID_PER_TICK.get();
   }
 
   @Override
-  public ComponentType getComponentType() {
+  public ComponentType<FluidHandler> getComponentType() {
     return ComponentRegistration.COMPONENT_FLUID.get();
   }
 
   @Override
   public boolean test(FluidComponent component, ICraftingContext context) {
-    HybridTank handler = component.getContainerProvider();
+    FluidHandler handler = component.getContainerProvider();
     return switch (getMode()) {
       case INPUT -> {
-        int amount = (int) context.getPerTickIntegerModifiedValue(this.amount, this);
-        FluidStack drained = handler.drain(this.required.asFluidStack().copyWithAmount(amount), IFluidHandler.FluidAction.SIMULATE);
-        yield drained.getAmount() == required.getAmount();
+        int amount = (int) context.getPerTickIntegerModifiedValue(this.ingredient.amount(), this);
+        yield handler.getIngredientAmount(this.ingredient.ingredient()) >= amount;
       }
       case OUTPUT -> {
-        int amount = (int) context.getPerTickIntegerModifiedValue(this.amount, this);
-        int filled = handler.fill(required.asFluidStack().copyWithAmount(amount), IFluidHandler.FluidAction.SIMULATE);
-        yield filled == amount;
+        int amount = (int) context.getPerTickIntegerModifiedValue(this.ingredient.amount(), this);
+        yield handler.getSpaceForFluid(this.output()) >= amount;
       }
       case NONE -> true;
     };
+  }
+
+  private FluidStack output() {
+    return this.ingredient.getFluids()[0];
   }
 
   @Override
@@ -84,33 +79,37 @@ public class RequirementFluidPerTick implements IRequirement<FluidComponent> {
   }
 
   private CraftingResult processInput(FluidComponent component, ICraftingContext context) {
-    int amount = (int) context.getPerTickIntegerModifiedValue(this.amount, this);
-    int toDrain = amount;
-    FluidStack fluid = required.asFluidStack().copyWithAmount(toDrain);
-    int canDrain = component.getContainerProvider().getFluidAmount();
-    if (canDrain > 0) {
-      canDrain = Math.min(canDrain, toDrain);
-      component.getContainerProvider().drain(fluid.copyWithAmount(canDrain), IFluidHandler.FluidAction.EXECUTE);
-      toDrain -= canDrain;
-      if (toDrain == 0)
-        return CraftingResult.success();
+    int amount = (int) context.getIntegerModifiedValue(this.ingredient.amount(), this);
+    int maxExtract = component.getContainerProvider().getFluidAmount(ingredient.ingredient());
+
+    if (maxExtract >= amount) {
+      component.removeFromInputs(this.ingredient.ingredient(), amount);
+      return CraftingResult.success();
     }
-    return errorInput(amount, component.getContainerProvider().getFluid(), component.getContainerProvider().getFluidAmount());
+
+    return errorInput(amount, component.getContainerProvider().getFluids(),
+        component.getContainerProvider().getFluidAmount(ingredient.ingredient()));
   }
 
-  private CraftingResult errorInput(int amount, FluidStack found, int amountFound) {
+  public Component ingredients() {
+    return Arrays.stream(ingredient.ingredient().getStacks())
+        .map(FluidStack::getHoverName)
+        .collect(Component::empty, (a, b) -> a.append(Component.translatable("modular_machinery_reborn.jei.ingredient.structure.or").append(b)), MutableComponent::append);
+  }
+
+  private CraftingResult errorInput(int amount, FluidIngredient found, int amountFound) {
     return CraftingResult.error(Component.translatable(
         "craftcheck.failure.fluid.input",
-        amount, required.asFluidStack().getHoverName(),
-        amountFound, found.getHoverName()
+        amount, ingredients(),
+        amountFound, String.valueOf(found)
     ));
   }
 
-  private CraftingResult errorOutput(FluidStack found) {
+  private CraftingResult errorOutput(FluidIngredient found) {
     return CraftingResult.error(Component.translatable(
         "craftcheck.failure.fluid.output.fluid",
-        required.asFluidStack().getHoverName(),
-        found.getHoverName()
+        ingredients(),
+        found.toString()
     ));
   }
 
@@ -123,13 +122,14 @@ public class RequirementFluidPerTick implements IRequirement<FluidComponent> {
   }
 
   private CraftingResult processOutput(FluidComponent component, ICraftingContext context) {
-    HybridTank handler = component.getContainerProvider();
-    if (!handler.isEmpty() && !handler.getFluid().is(required.asFluidStack().getFluid()))
-      return errorOutput(handler.getFluid());
-    int amount = (int) context.getPerTickIntegerModifiedValue(this.amount, this);
-    int canFill = handler.getSpace();
+    FluidHandler handler = component.getContainerProvider();
+    var output = ingredient.getFluids()[0];
+    if (!handler.isEmpty() && !handler.contains(ingredient.ingredient()))
+      return errorOutput(handler.getFluids());
+    int amount = (int) context.getIntegerModifiedValue(this.ingredient.amount(), this);
+    int canFill = handler.getSpaceForFluid(output());
     if (canFill >= amount) {
-      handler.fill(required.asFluidStack().copyWithAmount(amount), IFluidHandler.FluidAction.EXECUTE);
+      component.addToOutputs(output.copyWithAmount(amount));
       return CraftingResult.success();
     }
     return errorOutput(canFill, amount);
@@ -138,13 +138,13 @@ public class RequirementFluidPerTick implements IRequirement<FluidComponent> {
   @Override
   public JsonObject asJson() {
     JsonObject json = IRequirement.super.asJson();
-    json.addProperty("fluid", required.asFluidStack().getHoverName().getString());
-    json.addProperty("amount", required.asFluidStack().getAmount());
+    json.addProperty("fluid", ingredient.toString());
+    json.addProperty("amount", ingredient.amount());
     return json;
   }
 
   @Override
-  public @NotNull Component getMissingComponentErrorMessage(IOType ioType) {
+  public Component getMissingComponentErrorMessage(IOType ioType) {
     return Component.translatable(String.format("component.missing.fluid.%s", ioType.name().toLowerCase()));
   }
 
@@ -152,10 +152,9 @@ public class RequirementFluidPerTick implements IRequirement<FluidComponent> {
   public boolean isComponentValid(FluidComponent m, ICraftingContext context) {
     if (getMode().isInput()) {
       if (m.getContainerProvider().isEmpty()) return false;
-      return FluidStack.isSameFluidSameComponents(m.getContainerProvider().getFluid(), required.asFluidStack());
     } else {
       if (m.getContainerProvider().isEmpty()) return true;
-      else return FluidStack.isSameFluidSameComponents(m.getContainerProvider().getFluid(), required.asFluidStack());
     }
+    return m.getContainerProvider().contains(ingredient.ingredient());
   }
 }

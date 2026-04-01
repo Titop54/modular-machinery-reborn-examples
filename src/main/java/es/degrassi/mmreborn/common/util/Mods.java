@@ -7,6 +7,10 @@ public interface Mods {
     return ModList.get().isLoaded("almostunified");
   }
 
+  static boolean isAthenaLoaded() {
+    return ModList.get().isLoaded("athena");
+  }
+
   static boolean isJEILoaded() {
     return ModList.get().isLoaded("jei");
   }
@@ -16,5 +20,13 @@ public interface Mods {
 
   static boolean isJEIorEMILoaded() {
     return isEMILoaded() || isJEILoaded();
+  }
+
+  static boolean isLDLibLoaded() {
+    return ModList.get().isLoaded("ldlib2");
+  }
+
+  static boolean shouldAddExpHandlerToAe2() {
+    return ModList.get().isLoaded("ae2") && ModList.get().isLoaded("appex");
   }
 }
