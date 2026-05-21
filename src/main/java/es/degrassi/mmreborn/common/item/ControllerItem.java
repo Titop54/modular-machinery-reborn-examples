@@ -1,9 +1,13 @@
 package es.degrassi.mmreborn.common.item;
 
+import com.google.common.collect.Lists;
+import com.mojang.datafixers.util.Either;
 import es.degrassi.mmreborn.ModularMachineryReborn;
 import es.degrassi.mmreborn.api.BlockIngredient;
 import es.degrassi.mmreborn.api.client.machine.TooltipUse;
 import es.degrassi.mmreborn.common.block.BlockController;
+import es.degrassi.mmreborn.common.data.MMRConfig;
+import es.degrassi.mmreborn.common.integration.kubejs.KubeJSIntegration;
 import es.degrassi.mmreborn.common.machine.DynamicMachine;
 import es.degrassi.mmreborn.common.registration.BlockRegistration;
 import es.degrassi.mmreborn.common.registration.DataComponentRegistration;
@@ -37,6 +41,8 @@ import java.util.stream.Collectors;
 
 public class ControllerItem extends ItemBlockMachineComponent {
   public static final ResourceLocation DUMMY = ModularMachineryReborn.rl("dummy");
+
+  private static final List<Component> CACHED_COMPONENTS = Lists.newArrayList();
 
   public ControllerItem() {
     super(
@@ -126,12 +132,21 @@ public class ControllerItem extends ItemBlockMachineComponent {
                 .append(Component.translatable("modular_machinery_reborn.controller.control.modifier").withStyle(ChatFormatting.GRAY))
         );
       }
-      var enumTooltips = ModularMachineryReborn.MACHINE_EXTRA_TOOLTIPS.get(machine.getRegistryName());
-      if (enumTooltips == null || enumTooltips.isEmpty()) return;
-      var extra = enumTooltips.get(TooltipUse.ITEM);
-      if (extra == null || extra.isEmpty()) return;
-      tooltipComponents.add(Component.literal(""));
-      tooltipComponents.addAll(extra);
+      if (context.level().getGameTime() % MMRConfig.get().dynamicTooltipTicks.get() == 0) {
+        CACHED_COMPONENTS.clear();
+        Optional.ofNullable(ModularMachineryReborn.MACHINE_EXTRA_TOOLTIPS.get(machine.getRegistryName()))
+            .map(enumTooltips -> enumTooltips.get(TooltipUse.ITEM))
+            .ifPresent(extra -> {
+              if (!extra.isEmpty()) {
+                tooltipComponents.add(Component.literal(""));
+                for (Either<ResourceLocation, Component> either : extra) {
+                  either.ifRight(CACHED_COMPONENTS::add);
+                  either.ifLeft(eventId -> CACHED_COMPONENTS.add(KubeJSIntegration.sendDynamicTooltipEvent(eventId)));
+                }
+              }
+            });
+      }
+      tooltipComponents.addAll(CACHED_COMPONENTS);
     }, () -> tooltipComponents.add(Component.translatable("modular_machinery_reborn.controller.no_machine").withStyle(ChatFormatting.GRAY)));
   }
 

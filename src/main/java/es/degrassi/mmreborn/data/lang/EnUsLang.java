@@ -6,7 +6,7 @@ import es.degrassi.mmreborn.common.registration.BlockRegistration;
 import es.degrassi.mmreborn.common.registration.ItemRegistration;
 import es.degrassi.mmreborn.data.MMRTags;
 
-public final class EnUsLang extends Lang {
+final class EnUsLang extends Lang {
 
   @Override
   protected void addKeys() {
@@ -490,6 +490,7 @@ public final class EnUsLang extends Lang {
     add(mmr(tooltip("effect.interdimensional")), "Giving effect interdimensionally");
     add(mmr(tooltip("redstone.emit")), "Emitting %s");
     add(mmr(tooltip("redstone.receive")), "Receiving %s");
+    add(mmr(gui("missing_structure")), "Not Available until structure formed");
   }
 
   @Override

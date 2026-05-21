@@ -6,7 +6,7 @@ import es.degrassi.mmreborn.common.registration.BlockRegistration;
 import es.degrassi.mmreborn.common.registration.ItemRegistration;
 import es.degrassi.mmreborn.data.MMRTags;
 
-public final class EsEsLang extends Lang {
+final class EsEsLang extends Lang {
   @Override
   protected void addItemGroups() {
     add("itemgroup." + mm("group"), "Modular Machinery Reborn");
@@ -486,6 +486,7 @@ public final class EsEsLang extends Lang {
     add(mmr(tooltip("effect.interdimensional")), "Giving effect interdimensionally");
     add(mmr(tooltip("redstone.emit")), "Emitting %s");
     add(mmr(tooltip("redstone.receive")), "Receiving %s");
+    add(mmr(gui("missing_structure")), "No disponible hasta que la estructura no esté formada");
   }
 
   @Override
